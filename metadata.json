@@ -1,0 +1,6 @@
+{
+  "name": "KDP Business Tracker",
+  "description": "Application autonome de suivi quotidien des revenus KDP, des dépenses Amazon Ads, des bénéfices et de la rentabilité pour auteurs auto-édités.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
