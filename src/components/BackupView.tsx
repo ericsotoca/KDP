@@ -299,11 +299,11 @@ export const BackupView: React.FC<BackupViewProps> = ({
             </p>
           </div>
 
-          {/* Étape 2 */}
+          {/* Étape 2: Premier envoi */}
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-900">
-                Étape 2 : Lier votre code et pousser sur GitHub
+                Étape 2 : Premier envoi (Initialisation du dépôt)
               </span>
               <button
                 onClick={() => copyCode(
@@ -315,7 +315,7 @@ git remote add origin https://github.com/VOTRE_NOM/kdp-business-tracker.git
 git push -u origin main`,
                   2
                 )}
-                className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800"
+                className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 cursor-pointer"
               >
                 {copiedStep === 2 ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copiedStep === 2 ? 'Copié !' : 'Copier les commandes'}</span>
@@ -331,6 +331,38 @@ git push -u origin main`}
             </pre>
           </div>
 
+          {/* MISE A JOUR GITHUB (POUR ENVOYER LES NOUVEAUTES) */}
+          <div className="p-3.5 bg-emerald-50/80 rounded-lg border border-emerald-300 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-bold text-emerald-950">
+                  Mise à jour GitHub (Envoyer les dernières fonctionnalités)
+                </span>
+              </div>
+              <button
+                onClick={() => copyCode(
+`git add .
+git commit -m "Mise à jour : courbe CA/Pub cumulé jour par jour"
+git push`,
+                  4
+                )}
+                className="flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-200/80 hover:bg-emerald-200 px-2 py-1 rounded transition-colors cursor-pointer"
+              >
+                {copiedStep === 4 ? <Check className="w-3.5 h-3.5 text-emerald-800" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedStep === 4 ? 'Copié !' : 'Copier mise à jour'}</span>
+              </button>
+            </div>
+            <p className="text-emerald-900 text-[11px]">
+              Si vous avez déjà créé votre dépôt GitHub, exécutez ces 3 lignes dans votre terminal pour déployer la courbe cumulée et les derniers correctifs :
+            </p>
+            <pre className="p-2.5 bg-slate-900 text-emerald-400 rounded-md font-mono text-[11px] overflow-x-auto">
+{`git add .
+git commit -m "Mise à jour : courbe CA/Pub cumulé jour par jour"
+git push`}
+            </pre>
+          </div>
+
           {/* Étape 3 */}
           <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
@@ -341,7 +373,7 @@ git push -u origin main`}
             <ol className="list-decimal list-inside space-y-1 text-slate-600 leading-relaxed">
               <li>Rendez-vous dans votre dépôt GitHub &gt; <strong>Settings</strong> &gt; <strong>Pages</strong>.</li>
               <li>Dans <strong>Build and deployment &gt; Source</strong>, choisissez <strong>GitHub Actions</strong>.</li>
-              <li>Sélectionnez le template <strong>Vite</strong> ou créez un workflow automatique.</li>
+              <li>Le workflow <code className="bg-white px-1 py-0.5 rounded border border-slate-200 font-mono">deploy.yml</code> s'exécutera automatiquement.</li>
               <li>Votre application sera instantanément accessible en ligne sur <code className="bg-white px-1 py-0.5 rounded border border-slate-200 font-mono">https://votre-compte.github.io/kdp-business-tracker/</code>.</li>
             </ol>
           </div>

@@ -22,6 +22,7 @@ import {
   Tooltip, 
   Legend 
 } from 'recharts';
+import { CumulativeMonthChart } from './CumulativeMonthChart';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -276,12 +277,22 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {activeChartTab === 'daily' ? (
         <div className="space-y-6">
           
-          {/* GRAPHIQUE 1 : Évolution quotidienne du chiffre d'affaires */}
+          {/* GRAPHIQUE VEDETTE : Courbe d'évolution du CA et Pub cumulés jour par jour */}
+          <CumulativeMonthChart
+            data={dailyPoints}
+            selectedYear={selectedYear}
+            selectedMonth={selectedMonth}
+            monthRevenue={monthMetrics.monthRevenue}
+            monthAds={monthMetrics.monthAds}
+            monthProfit={monthMetrics.monthProfit}
+          />
+
+          {/* GRAPHIQUE 2 : Évolution quotidienne du chiffre d'affaires */}
           <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">
-                  1. Évolution quotidienne du chiffre d'affaires
+                  2. Détail journalier du chiffre d'affaires (€)
                 </h3>
                 <p className="text-xs text-slate-500">
                   Revenus journaliers en euros (€) pour {getMonthNameFr(selectedMonth)} {selectedYear}

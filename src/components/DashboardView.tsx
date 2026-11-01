@@ -9,8 +9,10 @@ import {
   getMonthNameFr,
   getTodayDateString,
   formatDateFr,
-  formatLastUpdated
+  formatLastUpdated,
+  getDailyChartData
 } from '../utils/calculations';
+import { CumulativeMonthChart } from './CumulativeMonthChart';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -22,7 +24,6 @@ import {
   ArrowRight, 
   ChevronLeft, 
   ChevronRight,
-  Info,
   Clock,
   RotateCw,
   Check,
@@ -57,6 +58,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const dayMetrics = getDayMetrics(entries, todayStr);
   const monthMetrics = getMonthMetrics(entries, selectedYear, selectedMonth);
   const yearMetrics = getYearMetrics(entries, selectedYear);
+  const dailyPoints = getDailyChartData(entries, selectedYear, selectedMonth);
 
   // Month navigation helpers
   const handlePrevMonth = () => {
@@ -471,6 +473,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* COURBE D'ÉVOLUTION DU CA ET DE LA PUB CUMULÉS JOUR PAR JOUR (A PARTIR DU 1ER DU MOIS) */}
+      <CumulativeMonthChart
+        data={dailyPoints}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+        monthRevenue={monthMetrics.monthRevenue}
+        monthAds={monthMetrics.monthAds}
+        monthProfit={monthMetrics.monthProfit}
+      />
+
       {/* SECONDARY ROW: OBJECTIFS DU MOIS & BILAN ANNUEL */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -691,19 +703,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         )}
       </div>
 
-      {/* IMPORTANT FISCAL / ACCOUNTING DISCLAIMER */}
-      <div className="rounded-xl bg-slate-100/90 border border-slate-200/90 p-4 text-slate-700 text-xs flex items-start gap-3">
-        <Info className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="font-semibold text-slate-900">
-            Avertissement comptable important :
-          </p>
-          <p className="text-slate-600 leading-relaxed">
-            Le « bénéfice » calculé dans cette application correspond au <strong>chiffre d'affaires KDP diminué uniquement des dépenses publicitaires Amazon Ads</strong>. 
-            Il ne doit pas être confondu avec votre résultat net comptable ou fiscal : les autres charges de votre activité (cotisations sociales URSSAF / micro-entreprise, impôt sur le revenu, frais bancaires, logiciels, frais de graphisme ou de correction) ne sont pas déduits dans ce calcul quotidien.
-          </p>
-        </div>
-      </div>
     </div>
   );
 };
