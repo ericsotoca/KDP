@@ -112,7 +112,8 @@ export default function App() {
     month: number,
     revenue: number,
     adsCost: number,
-    booksSold?: number
+    booksSold?: number,
+    expectedRevenue?: number
   ) => {
     const monthStr = String(month).padStart(2, '0');
     const prefix = `${year}-${monthStr}`;
@@ -122,6 +123,7 @@ export default function App() {
       id: `monthly-${year}-${monthStr}`,
       date: `${year}-${monthStr}-01`,
       revenue: Math.max(0, revenue),
+      expectedRevenue: expectedRevenue != null && !isNaN(expectedRevenue) && expectedRevenue >= 0 ? expectedRevenue : undefined,
       adsCost: Math.max(0, adsCost),
       booksSold: booksSold != null && !isNaN(booksSold) ? Math.max(0, booksSold) : undefined,
       comment: `Saisie globale mensuelle`,
@@ -138,6 +140,7 @@ export default function App() {
     setEntries(updated);
     saveStoredEntries(updated);
   };
+
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900">
@@ -192,6 +195,7 @@ export default function App() {
         {activeTab === 'analytics' && (
           <AnalyticsView
             entries={entries}
+            goals={goals}
             selectedYear={selectedYear}
             selectedMonth={selectedMonth}
             onSelectYear={setSelectedYear}

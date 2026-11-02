@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DailyEntry, ActiveTab } from '../types';
+import { DailyEntry, ActiveTab, UserGoals } from '../types';
 import { 
   getDailyChartData, 
   getYearlyMonthlyComparison, 
@@ -37,6 +37,7 @@ import {
 
 interface AnalyticsViewProps {
   entries: DailyEntry[];
+  goals?: UserGoals;
   selectedYear: number;
   selectedMonth: number;
   onSelectYear: (year: number) => void;
@@ -46,6 +47,7 @@ interface AnalyticsViewProps {
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   entries,
+  goals,
   selectedYear,
   selectedMonth,
   onSelectYear,
@@ -53,6 +55,16 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   setActiveTab,
 }) => {
   const [activeChartTab, setActiveChartTab] = useState<'daily' | 'comparison'>('daily');
+
+  // Respecte la préférence de pop-up (mémorisée dans localStorage)
+  const [showTooltip] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('kdp_show_chart_tooltip');
+      return saved !== null ? saved === 'true' : false;
+    } catch {
+      return false;
+    }
+  });
 
   const dailyPoints = getDailyChartData(entries, selectedYear, selectedMonth);
   const monthlyPoints = getYearlyMonthlyComparison(entries, selectedYear);
@@ -78,11 +90,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
   };
 
   // Custom tooltips
-  const CustomDailyTooltip = ({ active, payload, label }: any) => {
+  const CustomDailyTooltip = ({ active, payload }: any) => {
+    if (!showTooltip) return null;
     if (active && payload && payload.length) {
       const point = payload[0].payload;
       return (
-        <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-lg text-xs space-y-1 min-w-44">
+        <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-lg text-xs space-y-1 min-w-44 pointer-events-none select-none">
           <p className="font-bold text-slate-900 border-b border-slate-100 pb-1">
             {point.formattedDate} {selectedYear}
           </p>
@@ -118,11 +131,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     return null;
   };
 
-  const CustomMonthlyTooltip = ({ active, payload, label }: any) => {
+  const CustomMonthlyTooltip = ({ active, payload }: any) => {
+    if (!showTooltip) return null;
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
-        <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-lg text-xs space-y-1 min-w-48">
+        <div className="bg-white p-3 border border-slate-200 rounded-xl shadow-lg text-xs space-y-1 min-w-48 pointer-events-none select-none">
           <p className="font-bold text-slate-900 border-b border-slate-100 pb-1">
             {data.monthName} {selectedYear}
           </p>
@@ -277,7 +291,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       {activeChartTab === 'daily' ? (
         <div className="space-y-6">
           
-          {/* GRAPHIQUE VEDETTE : Courbe d'évolution du CA et Pub cumulés jour par jour */}
+          {/* GRAPHIQUE VEDETTE : Courbe d'évolution du CA et Pub cumulés jour par jour avec 2 tendances & synthèse */}
           <CumulativeMonthChart
             data={dailyPoints}
             selectedYear={selectedYear}
@@ -285,6 +299,9 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             monthRevenue={monthMetrics.monthRevenue}
             monthAds={monthMetrics.monthAds}
             monthProfit={monthMetrics.monthProfit}
+            entries={entries}
+            goals={goals}
+            onNavigateToEntry={() => setActiveTab('entry')}
           />
 
           {/* GRAPHIQUE 2 : Évolution quotidienne du chiffre d'affaires */}
@@ -315,7 +332,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={(v) => `${v}€`} />
-                  <Tooltip content={<CustomDailyTooltip />} />
+                  {showTooltip && <Tooltip content={<CustomDailyTooltip />} wrapperStyle={{ pointerEvents: 'none' }} />}
                   <Area
                     type="monotone"
                     dataKey="revenue"
@@ -359,7 +376,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={(v) => `${v}€`} />
-                  <Tooltip content={<CustomDailyTooltip />} />
+                  {showTooltip && <Tooltip content={<CustomDailyTooltip />} wrapperStyle={{ pointerEvents: 'none' }} />}
                   <Bar dataKey="revenue" name="CA KDP" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="adsCost" name="Amazon Ads" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -391,7 +408,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                   <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
                   <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={(v) => `${v}€`} />
-                  <Tooltip content={<CustomDailyTooltip />} />
+                  {showTooltip && <Tooltip content={<CustomDailyTooltip />} wrapperStyle={{ pointerEvents: 'none' }} />}
                   <Line
                     type="monotone"
                     dataKey="cumulProfit"
@@ -425,7 +442,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} tickFormatter={(v) => `${v}€`} />
-                <Tooltip content={<CustomMonthlyTooltip />} />
+                {showTooltip && <Tooltip content={<CustomMonthlyTooltip />} wrapperStyle={{ pointerEvents: 'none' }} />}
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 10 }} />
                 <Bar dataKey="revenue" name="Chiffre d'affaires (€)" fill="#2563eb" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="adsCost" name="Dépenses Amazon Ads (€)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
@@ -442,6 +459,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                   <th className="py-2 px-3">Mois</th>
                   <th className="py-2 px-3 text-right">CA (€)</th>
                   <th className="py-2 px-3 text-right">Ads (€)</th>
+                  <th className="py-2 px-3 text-right">TACoS</th>
                   <th className="py-2 px-3 text-right">Bénéfice (€)</th>
                   <th className="py-2 px-3 text-right">Marge</th>
                   <th className="py-2 px-3 text-right">Livres</th>
@@ -449,31 +467,37 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {monthlyPoints.map((m) => (
-                  <tr key={m.monthIndex} className={m.daysLogged > 0 ? 'hover:bg-slate-50' : 'opacity-40'}>
-                    <td className="py-2.5 px-3 font-semibold text-slate-900">{m.monthName}</td>
-                    <td className="py-2.5 px-3 text-right font-mono-numbers text-blue-700 font-semibold">
-                      {formatCurrency(m.revenue)}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono-numbers text-amber-600 font-semibold">
-                      {formatCurrency(m.adsCost)}
-                    </td>
-                    <td className={`py-2.5 px-3 text-right font-mono-numbers font-bold ${
-                      m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                    }`}>
-                      {formatCurrency(m.profit)}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono-numbers text-slate-700">
-                      {m.revenue > 0 ? formatPercent(m.marginPercent) : '—'}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono-numbers text-slate-600">
-                      {m.booksSold > 0 ? `${m.booksSold} ex.` : '—'}
-                    </td>
-                    <td className="py-2.5 px-3 text-right font-mono-numbers text-slate-500">
-                      {m.daysLogged} j
-                    </td>
-                  </tr>
-                ))}
+                {monthlyPoints.map((m) => {
+                  const tacos = m.revenue > 0 ? (m.adsCost / m.revenue) * 100 : 0;
+                  return (
+                    <tr key={m.monthIndex} className={m.daysLogged > 0 ? 'hover:bg-slate-50' : 'opacity-40'}>
+                      <td className="py-2.5 px-3 font-semibold text-slate-900">{m.monthName}</td>
+                      <td className="py-2.5 px-3 text-right font-mono-numbers text-blue-700 font-semibold">
+                        {formatCurrency(m.revenue)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono-numbers text-amber-600 font-semibold">
+                        {formatCurrency(m.adsCost)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono-numbers font-semibold text-amber-700">
+                        {tacos > 0 ? `${tacos.toFixed(1)} %` : '—'}
+                      </td>
+                      <td className={`py-2.5 px-3 text-right font-mono-numbers font-bold ${
+                        m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                      }`}>
+                        {formatCurrency(m.profit)}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono-numbers text-slate-700">
+                        {m.revenue > 0 ? formatPercent(m.marginPercent) : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono-numbers text-slate-600">
+                        {m.booksSold > 0 ? `${m.booksSold} ex.` : '—'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono-numbers text-slate-500">
+                        {m.daysLogged} j
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -10,9 +10,12 @@ import {
   getTodayDateString,
   formatDateFr,
   formatLastUpdated,
-  getDailyChartData
+  getDailyChartData,
+  getTacosDiagnostic
 } from '../utils/calculations';
 import { CumulativeMonthChart } from './CumulativeMonthChart';
+import { AdsGrossToNetConverter } from './AdsGrossToNetConverter';
+import { TacosCalculatorModal } from './TacosCalculatorModal';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -23,12 +26,13 @@ import {
   Target, 
   ArrowRight, 
   ChevronLeft, 
-  ChevronRight,
+  ChevronRight, 
   Clock,
   RotateCw,
   Check,
   Percent,
-  HelpCircle
+  HelpCircle,
+  Calculator
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -40,7 +44,14 @@ interface DashboardViewProps {
   onSelectMonth: (month: number) => void;
   setActiveTab: (tab: ActiveTab) => void;
   onEditEntry: (entry: DailyEntry) => void;
-  onSaveMonthlySummary?: (year: number, month: number, revenue: number, adsCost: number, booksSold?: number) => void;
+  onSaveMonthlySummary?: (
+    year: number,
+    month: number,
+    revenue: number,
+    adsCost: number,
+    booksSold?: number,
+    expectedRevenue?: number
+  ) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -107,38 +118,90 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     new Date().getFullYear() === selectedYear && 
     new Date().getMonth() + 1 === selectedMonth;
 
-  // Quick 2-number state for dashboard
+  // Quick state for dashboard with dual revenue (Real vs Expected)
   const [quickRevenue, setQuickRevenue] = useState<string>('');
+  const [quickExpectedRevenue, setQuickExpectedRevenue] = useState<string>('');
   const [quickAds, setQuickAds] = useState<string>('');
   const [quickSaved, setQuickSaved] = useState<boolean>(false);
+  const [isTacosModalOpen, setIsTacosModalOpen] = useState<boolean>(false);
+
+  const tacosDiagnostic = getTacosDiagnostic(
+    monthMetrics.tacos,
+    monthMetrics.monthAds,
+    monthMetrics.monthRevenue
+  );
 
   // Sync quick inputs with current month metrics
   useEffect(() => {
-    if (monthMetrics.monthRevenue > 0 || monthMetrics.monthAds > 0) {
+    if (monthMetrics.monthRevenue > 0 || monthMetrics.monthExpectedRevenue > 0 || monthMetrics.monthAds > 0) {
       setQuickRevenue(monthMetrics.monthRevenue ? monthMetrics.monthRevenue.toString() : '');
+      setQuickExpectedRevenue(
+        monthMetrics.monthExpectedRevenue && Math.abs(monthMetrics.monthExpectedRevenue - monthMetrics.monthRevenue) >= 0.01
+          ? monthMetrics.monthExpectedRevenue.toString()
+          : ''
+      );
       setQuickAds(monthMetrics.monthAds ? monthMetrics.monthAds.toString() : '');
     } else {
       setQuickRevenue('');
+      setQuickExpectedRevenue('');
       setQuickAds('');
     }
-  }, [selectedYear, selectedMonth, monthMetrics.monthRevenue, monthMetrics.monthAds]);
+  }, [selectedYear, selectedMonth, monthMetrics.monthRevenue, monthMetrics.monthExpectedRevenue, monthMetrics.monthAds]);
 
   const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const rev = parseFloat(quickRevenue.replace(',', '.')) || 0;
+    const expRev = quickExpectedRevenue ? parseFloat(quickExpectedRevenue.replace(',', '.')) || rev : rev;
     const ads = parseFloat(quickAds.replace(',', '.')) || 0;
 
     if (onSaveMonthlySummary) {
-      onSaveMonthlySummary(selectedYear, selectedMonth, rev, ads);
+      onSaveMonthlySummary(selectedYear, selectedMonth, rev, ads, undefined, expRev !== rev ? expRev : undefined);
       setQuickSaved(true);
       setTimeout(() => setQuickSaved(false), 3000);
     }
   };
 
+  // Handler for Ads Gross -> Net Royalty Converter on Dashboard
+  const handleApplyNetToQuickRev = (netAmount: number, target: 'real' | 'expected', mode: 'add' | 'replace') => {
+    if (target === 'expected') {
+      const base = quickExpectedRevenue 
+        ? parseFloat(quickExpectedRevenue.replace(',', '.')) || 0
+        : (parseFloat(quickRevenue.replace(',', '.')) || 0);
+      const nextVal = mode === 'add' ? Math.round((base + netAmount) * 100) / 100 : netAmount;
+      setQuickExpectedRevenue(nextVal.toFixed(2));
+
+      if (onSaveMonthlySummary) {
+        const rev = parseFloat(quickRevenue.replace(',', '.')) || 0;
+        const ads = parseFloat(quickAds.replace(',', '.')) || 0;
+        onSaveMonthlySummary(selectedYear, selectedMonth, rev, ads, undefined, nextVal);
+        setQuickSaved(true);
+        setTimeout(() => setQuickSaved(false), 3000);
+      }
+    } else {
+      const current = parseFloat(quickRevenue.replace(',', '.')) || 0;
+      const nextVal = mode === 'add' ? Math.round((current + netAmount) * 100) / 100 : netAmount;
+      setQuickRevenue(nextVal.toFixed(2));
+
+      if (onSaveMonthlySummary) {
+        const expRev = quickExpectedRevenue ? parseFloat(quickExpectedRevenue.replace(',', '.')) || 0 : nextVal;
+        const ads = parseFloat(quickAds.replace(',', '.')) || 0;
+        onSaveMonthlySummary(selectedYear, selectedMonth, nextVal, ads, undefined, expRev);
+        setQuickSaved(true);
+        setTimeout(() => setQuickSaved(false), 3000);
+      }
+    }
+  };
+
   const parsedQuickRev = parseFloat(quickRevenue.replace(',', '.')) || 0;
+  const parsedQuickExpRev = quickExpectedRevenue 
+    ? parseFloat(quickExpectedRevenue.replace(',', '.')) || parsedQuickRev 
+    : parsedQuickRev;
   const parsedQuickAds = parseFloat(quickAds.replace(',', '.')) || 0;
   const quickProfit = parsedQuickRev - parsedQuickAds;
+  const quickExpectedProfit = parsedQuickExpRev - parsedQuickAds;
   const quickMargin = parsedQuickRev > 0 ? (quickProfit / parsedQuickRev) * 100 : 0;
+  const quickExpectedMargin = parsedQuickExpRev > 0 ? (quickExpectedProfit / parsedQuickExpRev) * 100 : 0;
+
 
   // Find current month entry to show last update timestamp
   const currentMonthEntry = entries.find((e) => e.date.startsWith(monthPrefix));
@@ -242,11 +305,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end pt-1">
           
-          {/* Chiffre 1: CA KDP */}
-          <div className="lg:col-span-5">
+          {/* Chiffre 1: CA KDP Réel */}
+          <div className="lg:col-span-4">
             <div className="flex items-center justify-between mb-1">
               <label className="text-[11px] font-bold text-blue-900 uppercase tracking-wider">
-                1. Chiffre d'affaires KDP du mois (€)
+                1. CA KDP Réel du mois (€)
               </label>
               {Math.abs(parsedQuickRev - monthMetrics.monthRevenue) >= 0.01 && monthMetrics.monthRevenue > 0 && (
                 <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
@@ -270,11 +333,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 placeholder="0.00"
                 value={quickRevenue}
                 onChange={(e) => setQuickRevenue(e.target.value)}
-                className="w-full pl-8 pr-3 py-2.5 text-base font-bold font-mono-numbers bg-white border border-blue-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-blue-700 shadow-2xs"
+                className="w-full pl-8 pr-3 py-2 text-base font-bold font-mono-numbers bg-white border border-blue-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-blue-700 shadow-2xs"
               />
             </div>
             {/* Quick Increment Buttons */}
-            <div className="flex items-center gap-1 mt-1.5 text-[11px]">
+            <div className="flex items-center gap-1 mt-1 text-[11px]">
               <span className="text-slate-400 text-[10px] mr-0.5">Ajout rapide :</span>
               {[2, 5, 10, 25].map((amt) => (
                 <button
@@ -285,7 +348,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     setQuickRevenue((Math.round((current + amt) * 100) / 100).toFixed(2));
                   }}
                   className="px-1.5 py-0.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 font-mono-numbers font-medium transition-colors cursor-pointer"
-                  title={`Ajouter +${amt} € au CA`}
+                  title={`Ajouter +${amt} € au CA Réel`}
                 >
                   +{amt}€
                 </button>
@@ -293,11 +356,56 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Chiffre 2: Amazon Ads */}
-          <div className="lg:col-span-4">
+          {/* Chiffre 2: CA Espéré (avec redevances Ads) */}
+          <div className="lg:col-span-3">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[11px] font-bold text-purple-900 uppercase tracking-wider flex items-center gap-1">
+                <span>2. CA Espéré (€)</span>
+                <span className="text-[9px] px-1 py-0.2 rounded bg-purple-100 text-purple-700 font-normal">
+                  2ème Courbe
+                </span>
+              </label>
+              {quickExpectedRevenue && (
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800">
+                  +{formatCurrency(Math.max(0, parsedQuickExpRev - parsedQuickRev))} Ads
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-purple-600 pointer-events-none">
+                €
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder={quickRevenue || '0.00'}
+                value={quickExpectedRevenue}
+                onChange={(e) => setQuickExpectedRevenue(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-base font-bold font-mono-numbers bg-purple-50/50 border border-purple-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 text-purple-800 shadow-2xs"
+                title="Total espéré (CA Réel KDP + redevances estimées des ventes publicitaires en attente)"
+              />
+            </div>
+            <div className="mt-1 text-[10px] text-purple-700 flex items-center justify-between">
+              <span>Alimente le Bénéfice Espéré</span>
+              {quickExpectedRevenue && (
+                <button
+                  type="button"
+                  onClick={() => setQuickExpectedRevenue('')}
+                  className="text-slate-400 hover:text-slate-600 underline cursor-pointer"
+                  title="Réinitialiser pour être identique au CA Réel"
+                >
+                  Réinitialiser
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Chiffre 3: Amazon Ads */}
+          <div className="lg:col-span-3">
             <div className="flex items-center justify-between mb-1">
               <label className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
-                2. Amazon Ads du mois (€)
+                3. Amazon Ads (€)
               </label>
               {Math.abs(parsedQuickAds - monthMetrics.monthAds) >= 0.01 && monthMetrics.monthAds > 0 && (
                 <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
@@ -317,29 +425,90 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 placeholder="0.00"
                 value={quickAds}
                 onChange={(e) => setQuickAds(e.target.value)}
-                className="w-full pl-8 pr-3 py-2.5 text-base font-bold font-mono-numbers bg-white border border-amber-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-amber-700 shadow-2xs"
+                className="w-full pl-8 pr-3 py-2 text-base font-bold font-mono-numbers bg-white border border-amber-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-amber-700 shadow-2xs"
               />
             </div>
-            <div className="flex items-center justify-between mt-1.5 text-[11px] text-slate-500">
-              <span>Bénéfice : <strong className={`font-mono-numbers ${quickProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(quickProfit)}</strong></span>
-              <span>Marge : <strong className="font-mono-numbers">{parsedQuickRev > 0 ? formatPercent(quickMargin) : '0%'}</strong></span>
+            <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <span>TACoS :</span>
+                <strong className="font-mono-numbers text-amber-700">
+                  {parsedQuickRev > 0 ? ((parsedQuickAds / parsedQuickRev) * 100).toFixed(1) : 0}%
+                </strong>
+                <span className="text-[10px] text-slate-400 font-normal">(Part pub/CA)</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsTacosModalOpen(true)}
+                className="text-[11px] font-semibold text-amber-700 hover:text-amber-900 underline flex items-center gap-0.5 cursor-pointer"
+                title="Ouvrir le simulateur de TACoS"
+              >
+                <Calculator className="w-3 h-3" />
+                <span>Simuler</span>
+              </button>
             </div>
           </div>
 
           {/* Bouton d'actualisation */}
-          <div className="lg:col-span-3">
+          <div className="lg:col-span-2">
             <button
               type="submit"
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-xs hover:shadow transition-all cursor-pointer whitespace-nowrap"
+              className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-lg shadow-xs hover:shadow transition-all cursor-pointer whitespace-nowrap"
             >
               <RotateCw className="w-3.5 h-3.5" />
-              <span>Actualiser les chiffres</span>
+              <span>Actualiser</span>
             </button>
             <p className="text-[10px] text-slate-400 text-center mt-1">
-              Touche Entrée pour valider
+              Touche Entrée
             </p>
           </div>
 
+        </div>
+
+        {/* Live dual calculations preview right below inputs */}
+        <div className="p-2.5 bg-white/90 rounded-lg border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              Vos 2 calculs :
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-600" />
+              <span>1. Bénéfice Réel :</span>
+              <strong className={`font-mono-numbers ${quickProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {formatCurrency(quickProfit)}
+              </strong>
+              <span className="text-[11px] text-slate-400 font-mono-numbers">
+                ({parsedQuickRev > 0 ? formatPercent(quickMargin) : '0%'})
+              </span>
+            </span>
+
+            <span className="text-slate-300">|</span>
+
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-purple-600" />
+              <span className="text-purple-900 font-semibold">2. Bénéfice Espéré :</span>
+              <strong className={`font-mono-numbers ${quickExpectedProfit >= 0 ? 'text-purple-700' : 'text-rose-700'}`}>
+                {formatCurrency(quickExpectedProfit)}
+              </strong>
+              <span className="text-[11px] text-purple-600 font-mono-numbers">
+                ({parsedQuickExpRev > 0 ? formatPercent(quickExpectedMargin) : '0%'})
+              </span>
+            </span>
+          </div>
+
+          {Math.abs(quickExpectedProfit - quickProfit) > 0.01 && (
+            <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 self-start sm:self-auto font-mono-numbers">
+              Écart redevances Ads : +{formatCurrency(quickExpectedProfit - quickProfit)}
+            </span>
+          )}
+        </div>
+
+        {/* Proposition 1 : Convertisseur intelligent CA Brut Ads -> Redevance Nette Estimée */}
+        <div className="pt-2 border-t border-blue-100">
+          <AdsGrossToNetConverter
+            currentRevenue={parsedQuickRev}
+            currentExpectedRevenue={parsedQuickExpRev}
+            onApplyNetRevenue={handleApplyNetToQuickRev}
+          />
         </div>
       </form>
 
@@ -375,7 +544,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* 2. CA DU MOIS */}
+        {/* 2. CA DU MOIS (Réel vs Espéré) */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs transition-shadow hover:shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
@@ -389,6 +558,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-2xl lg:text-3xl font-bold font-mono-numbers text-blue-700">
               {formatCurrency(monthMetrics.monthRevenue)}
             </div>
+            
+            {Math.abs(monthMetrics.monthExpectedRevenue - monthMetrics.monthRevenue) >= 0.01 && (
+              <div className="mt-1 flex items-center justify-between text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                <span>CA Espéré (+ Ads) :</span>
+                <span className="font-mono-numbers font-bold">
+                  {formatCurrency(monthMetrics.monthExpectedRevenue)}
+                </span>
+              </div>
+            )}
+
             <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
               <span>Moyenne quotidienne :</span>
               <span className="font-mono-numbers font-medium text-slate-700">
@@ -404,40 +583,81 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* 3. PUBLICITÉ DU MOIS */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs transition-shadow hover:shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Publicité du mois
-            </span>
-            <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Megaphone className="w-4 h-4" />
-            </span>
+        {/* 3. PUBLICITÉ & TACOS DU MOIS */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs transition-shadow hover:shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Publicité & TACoS
+              </span>
+              <span className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Megaphone className="w-4 h-4" />
+              </span>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl lg:text-3xl font-bold font-mono-numbers text-amber-600">
+                {formatCurrency(monthMetrics.monthAds)}
+              </div>
+              
+              <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
+                {/* TACoS Réel avec son ratio et badge */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700">TACoS Réel :</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono-numbers font-bold text-amber-700 text-sm">
+                      {monthMetrics.monthRevenue > 0 ? `${monthMetrics.tacos.toFixed(1)} %` : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Badge de diagnostic de santé du TACoS */}
+                {monthMetrics.monthAds > 0 && monthMetrics.monthRevenue > 0 && (
+                  <div className="flex items-center justify-between text-[11px] pt-0.5">
+                    <span className="text-slate-400">Santé KDP :</span>
+                    <span className={`px-2 py-0.5 rounded-md font-semibold border text-[10px] ${tacosDiagnostic.badgeClass}`}>
+                      {tacosDiagnostic.shortLabel}
+                    </span>
+                  </div>
+                )}
+
+                {/* TACoS Espéré si distinct */}
+                {Math.abs(monthMetrics.monthExpectedRevenue - monthMetrics.monthRevenue) >= 0.01 && monthMetrics.monthExpectedRevenue > 0 && (
+                  <div className="flex items-center justify-between text-xs text-purple-700 bg-purple-50/70 px-1.5 py-0.5 rounded border border-purple-200 mt-1">
+                    <span>TACoS Espéré (+ Ads) :</span>
+                    <span className="font-mono-numbers font-bold">
+                      {monthMetrics.expectedTacos.toFixed(1)} %
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                  <span>ROAS (Retour pub) :</span>
+                  <span className="font-mono-numbers font-medium text-slate-700">
+                    {monthMetrics.roas > 0 ? `${monthMetrics.roas.toFixed(2)}x` : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="mt-3">
-            <div className="text-2xl lg:text-3xl font-bold font-mono-numbers text-amber-600">
-              {formatCurrency(monthMetrics.monthAds)}
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-              <span>ACOS (Part pub/CA) :</span>
-              <span className="font-mono-numbers font-semibold text-amber-700">
-                {monthMetrics.acos > 0 ? `${monthMetrics.acos.toFixed(1)} %` : '—'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
-              <span>ROAS (Retour pub) :</span>
-              <span className="font-mono-numbers font-medium text-slate-700">
-                {monthMetrics.roas > 0 ? `${monthMetrics.roas.toFixed(2)}x` : '—'}
-              </span>
-            </div>
+
+          {/* Bouton vers le simulateur TACoS */}
+          <div className="mt-3 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsTacosModalOpen(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-semibold border border-amber-200 transition-colors cursor-pointer"
+            >
+              <Calculator className="w-3.5 h-3.5 text-amber-600" />
+              <span>Calculateur TACoS</span>
+            </button>
           </div>
         </div>
 
-        {/* 4. BÉNÉFICE DU MOIS */}
+        {/* 4. BÉNÉFICE DU MOIS (DEUX CALCULS : RÉEL ET ESPÉRÉ) */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs transition-shadow hover:shadow-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              Bénéfice du mois
+              Bénéfice du mois (2 Calculs)
             </span>
             <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${
               monthMetrics.monthProfit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
@@ -449,18 +669,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             </span>
           </div>
-          <div className="mt-3">
-            <div className={`text-2xl lg:text-3xl font-bold font-mono-numbers ${
-              monthMetrics.monthProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-            }`}>
-              {formatCurrency(monthMetrics.monthProfit)}
-            </div>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
-              <span>Marge bénéficiaire :</span>
-              <span className={`font-mono-numbers font-bold ${
-                monthMetrics.marginPercent >= 0 ? 'text-emerald-600' : 'text-rose-600'
+          <div className="mt-3 space-y-1">
+            {/* Calcul 1: Réel KDP */}
+            <div className="flex items-baseline justify-between">
+              <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                Réel KDP :
+              </span>
+              <span className={`text-xl font-bold font-mono-numbers ${
+                monthMetrics.monthProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
               }`}>
-                {formatPercent(monthMetrics.marginPercent)}
+                {formatCurrency(monthMetrics.monthProfit)}
+              </span>
+            </div>
+
+            {/* Calcul 2: Espéré avec Ads */}
+            <div className="flex items-baseline justify-between pt-1 border-t border-slate-100">
+              <span className="text-xs font-semibold text-purple-700 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-purple-600" />
+                Espéré (+ Ads) :
+              </span>
+              <span className={`text-xl font-bold font-mono-numbers ${
+                monthMetrics.monthExpectedProfit >= 0 ? 'text-purple-700' : 'text-rose-600'
+              }`}>
+                {formatCurrency(monthMetrics.monthExpectedProfit)}
+              </span>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
+              <span>Marge réelle / espérée :</span>
+              <span className="font-mono-numbers font-bold text-slate-700">
+                {formatPercent(monthMetrics.marginPercent)} / <span className="text-purple-700">{formatPercent(monthMetrics.expectedMarginPercent)}</span>
               </span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
@@ -473,14 +712,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
-      {/* COURBE D'ÉVOLUTION DU CA ET DE LA PUB CUMULÉS JOUR PAR JOUR (A PARTIR DU 1ER DU MOIS) */}
+      {/* COURBE D'ÉVOLUTION DU CA ET DE LA PUB CUMULÉS JOUR PAR JOUR AVEC TENDANCES & SYNTHÈSE */}
       <CumulativeMonthChart
         data={dailyPoints}
         selectedYear={selectedYear}
         selectedMonth={selectedMonth}
         monthRevenue={monthMetrics.monthRevenue}
+        monthExpectedRevenue={monthMetrics.monthExpectedRevenue}
         monthAds={monthMetrics.monthAds}
         monthProfit={monthMetrics.monthProfit}
+        monthExpectedProfit={monthMetrics.monthExpectedProfit}
+        entries={entries}
+        goals={goals}
+        onNavigateToEntry={() => setActiveTab('entry')}
       />
 
       {/* SECONDARY ROW: OBJECTIFS DU MOIS & BILAN ANNUEL */}
@@ -702,6 +946,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* MODAL CALCULATEUR & SIMULATEUR TACOS */}
+      <TacosCalculatorModal
+        isOpen={isTacosModalOpen}
+        onClose={() => setIsTacosModalOpen(false)}
+        defaultRevenue={monthMetrics.monthRevenue}
+        defaultExpectedRevenue={monthMetrics.monthExpectedRevenue}
+        defaultAds={monthMetrics.monthAds}
+        selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+      />
 
     </div>
   );
