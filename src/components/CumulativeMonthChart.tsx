@@ -30,9 +30,7 @@ import {
   Clock, 
   ArrowRight,
   Eye,
-  EyeOff,
-  GitCompare,
-  Layers
+  EyeOff
 } from 'lucide-react';
 
 interface CumulativeMonthChartProps {
@@ -40,37 +38,27 @@ interface CumulativeMonthChartProps {
   selectedYear: number;
   selectedMonth: number;
   monthRevenue: number;
-  monthExpectedRevenue?: number;
   monthAds: number;
   monthProfit: number;
-  monthExpectedProfit?: number;
   entries?: DailyEntry[];
   goals?: UserGoals;
   compact?: boolean;
   onNavigateToEntry?: () => void;
 }
 
-export type ChartDisplayMode = 'dual' | 'real_only' | 'expected_only';
-
 export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
   data,
   selectedYear,
   selectedMonth,
   monthRevenue,
-  monthExpectedRevenue,
   monthAds,
   monthProfit,
-  monthExpectedProfit,
   entries = [],
   goals,
   compact = false,
   onNavigateToEntry,
 }) => {
-  const effectiveExpectedRev = monthExpectedRevenue != null ? monthExpectedRevenue : monthRevenue;
-  const effectiveExpectedProfit = monthExpectedProfit != null ? monthExpectedProfit : monthProfit;
-  const hasExpectedDelta = Math.abs(effectiveExpectedRev - monthRevenue) >= 0.01;
-
-  const hasData = monthRevenue > 0 || effectiveExpectedRev > 0 || monthAds > 0 || data.length > 0;
+  const hasData = monthRevenue > 0 || monthAds > 0 || data.length > 0;
   const monthName = getMonthNameFr(selectedMonth);
 
   // État de la coche pour afficher ou masquer le pop-up / tooltip au survol
@@ -83,39 +71,20 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
     }
   });
 
-  // Mode d'affichage des courbes : 'dual' (2 courbes comparatives), 'real_only', 'expected_only'
-  const [chartMode, setChartMode] = useState<ChartDisplayMode>(() => {
-    try {
-      const saved = localStorage.getItem('kdp_chart_display_mode');
-      return (saved as ChartDisplayMode) || 'dual';
-    } catch {
-      return 'dual';
-    }
-  });
-
   const handleToggleTooltip = (enabled: boolean) => {
     setShowTooltip(enabled);
     try {
       localStorage.setItem('kdp_show_chart_tooltip', String(enabled));
     } catch {
-      // ignore localStorage error
-    }
-  };
-
-  const handleSetChartMode = (mode: ChartDisplayMode) => {
-    setChartMode(mode);
-    try {
-      localStorage.setItem('kdp_chart_display_mode', mode);
-    } catch {
       // ignore
     }
   };
 
-  // Compute trend projection (requires >= 3 entries)
+  // Projection de tendance (débloquée dès 3 entrées)
   const projection: MonthTrendProjection = getMonthTrendProjection(entries, selectedYear, selectedMonth);
   const showTrends = projection.hasEnoughData;
 
-  // Custom detailed tooltip handling both real and projected points, and dual calculations
+  // Infobulle / Pop-up détaillé au survol
   const CustomCumulativeTooltip = ({ active, payload }: any) => {
     if (!showTooltip) return null;
     if (active && payload && payload.length) {
@@ -124,45 +93,33 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
 
       if (isProj) {
         const trendRev = point.trendRevenue ?? 0;
-        const trendExpRev = point.trendExpectedRevenue ?? trendRev;
         const trendAds = point.trendAds ?? 0;
         const trendProfit = point.trendProfit ?? (trendRev - trendAds);
-        const trendExpProfit = point.trendExpectedProfit ?? (trendExpRev - trendAds);
 
         return (
-          <div className="bg-white p-3.5 border border-purple-200 rounded-xl shadow-xl text-xs space-y-2 min-w-64 ring-2 ring-purple-500/20 pointer-events-none select-none">
-            <div className="flex items-center justify-between border-b border-purple-100 pb-1.5 font-bold text-slate-900">
-              <span className="flex items-center gap-1.5 text-purple-700">
-                <Sparkles className="w-3.5 h-3.5 text-purple-600 animate-pulse" />
+          <div className="bg-white p-3.5 border border-blue-200 rounded-xl shadow-xl text-xs space-y-2 min-w-56 ring-2 ring-blue-500/20 pointer-events-none select-none">
+            <div className="flex items-center justify-between border-b border-blue-100 pb-1.5 font-bold text-slate-900">
+              <span className="flex items-center gap-1.5 text-blue-700">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
                 <span>Jour {point.day} {monthName} {selectedYear}</span>
               </span>
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
-                Projection
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">
+                Tendance
               </span>
             </div>
 
             <div className="space-y-1.5">
               <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                Tendances prévisionnelles fin de mois :
+                Projection fin de mois :
               </div>
               
               <div className="flex justify-between items-center text-blue-700 font-semibold">
                 <span className="flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-blue-600 inline-block" />
-                  CA Réel KDP :
+                  CA KDP Réel :
                 </span>
                 <span className="font-mono-numbers">{formatCurrency(trendRev)}</span>
               </div>
-
-              {hasExpectedDelta && (
-                <div className="flex justify-between items-center text-purple-700 font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" />
-                    CA Espéré (avec Ads) :
-                  </span>
-                  <span className="font-mono-numbers">{formatCurrency(trendExpRev)}</span>
-                </div>
-              )}
 
               <div className="flex justify-between items-center text-amber-600 font-semibold">
                 <span className="flex items-center gap-1.5">
@@ -172,47 +129,31 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
                 <span className="font-mono-numbers">{formatCurrency(trendAds)}</span>
               </div>
 
-              {/* 2 Calculs de Bénéfice */}
-              <div className="pt-1.5 border-t border-slate-100 space-y-1">
-                <div className="flex justify-between items-center font-bold">
-                  <span className="flex items-center gap-1.5 text-emerald-700">
-                    <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
-                    Bénéfice Réel :
-                  </span>
-                  <span className="font-mono-numbers text-emerald-700">
-                    {formatCurrency(trendProfit)}
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center font-bold">
-                  <span className="flex items-center gap-1.5 text-purple-700">
-                    <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" />
-                    Bénéfice Espéré :
-                  </span>
-                  <span className="font-mono-numbers text-purple-700">
-                    {formatCurrency(trendExpProfit)}
-                  </span>
-                </div>
+              <div className="pt-1.5 border-t border-slate-100 flex justify-between items-center font-bold">
+                <span className="flex items-center gap-1.5 text-emerald-700">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
+                  Bénéfice Net Projeté :
+                </span>
+                <span className="font-mono-numbers text-emerald-700">
+                  {formatCurrency(trendProfit)}
+                </span>
               </div>
             </div>
 
             <div className="pt-1 border-t border-slate-100 text-[10px] text-slate-400">
-              Projection à {point.day - projection.cutoffDay}j de votre dernière saisie
+              Projection à +{point.day - projection.cutoffDay}j de votre dernière saisie
             </div>
           </div>
         );
       }
 
-      // Real recorded point
+      // Point réel enregistré
       const revCumul = point.cumulRevenue ?? 0;
-      const expRevCumul = point.cumulExpectedRevenue ?? revCumul;
       const adsCumul = point.cumulAds ?? 0;
       const profitCumul = point.cumulProfit ?? (revCumul - adsCumul);
-      const expProfitCumul = point.cumulExpectedProfit ?? (expRevCumul - adsCumul);
-      const deltaProfit = expProfitCumul - profitCumul;
       
       return (
-        <div className="bg-white p-3.5 border border-slate-200 rounded-xl shadow-lg text-xs space-y-2 min-w-60 pointer-events-none select-none">
+        <div className="bg-white p-3.5 border border-slate-200 rounded-xl shadow-lg text-xs space-y-2 min-w-56 pointer-events-none select-none">
           <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 font-bold text-slate-900">
             <span>{point.day} {monthName} {selectedYear}</span>
             <span className="text-[10px] text-slate-500 font-semibold px-1.5 py-0.5 rounded bg-slate-100">
@@ -233,16 +174,6 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
               <span className="font-mono-numbers">{formatCurrency(revCumul)}</span>
             </div>
 
-            {hasExpectedDelta && (
-              <div className="flex justify-between items-center text-purple-700 font-semibold">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" />
-                  CA Espéré (+ Ads) :
-                </span>
-                <span className="font-mono-numbers">{formatCurrency(expRevCumul)}</span>
-              </div>
-            )}
-
             <div className="flex justify-between items-center text-amber-600 font-semibold">
               <span className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
@@ -251,35 +182,21 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
               <span className="font-mono-numbers">{formatCurrency(adsCumul)}</span>
             </div>
 
-            {/* Deux calculs possibles du bénéfice */}
-            <div className="pt-1.5 border-t border-slate-100 space-y-1">
-              <div className="flex justify-between items-center font-bold">
-                <span className={`flex items-center gap-1.5 ${profitCumul >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  <span className={`w-2 h-2 rounded-full inline-block ${profitCumul >= 0 ? 'bg-emerald-600' : 'bg-rose-600'}`} />
-                  1. Bénéfice Réel :
-                </span>
-                <span className={`font-mono-numbers ${profitCumul >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
-                  {formatCurrency(profitCumul)}
-                </span>
-              </div>
-
-              <div className="flex justify-between items-center font-bold">
-                <span className={`flex items-center gap-1.5 ${expProfitCumul >= 0 ? 'text-purple-700' : 'text-rose-700'}`}>
-                  <span className={`w-2 h-2 rounded-full inline-block ${expProfitCumul >= 0 ? 'bg-purple-600' : 'bg-rose-600'}`} />
-                  2. Bénéfice Espéré :
-                </span>
-                <span className={`font-mono-numbers ${expProfitCumul >= 0 ? 'text-purple-700' : 'text-rose-700'}`}>
-                  {formatCurrency(expProfitCumul)}
-                </span>
-              </div>
-
-              {deltaProfit > 0 && (
-                <div className="flex justify-between items-center text-[10px] text-purple-600 pt-0.5">
-                  <span>Ventes Ads en cours :</span>
-                  <span className="font-mono-numbers font-semibold">+{formatCurrency(deltaProfit)}</span>
-                </div>
-              )}
+            <div className="pt-1.5 border-t border-slate-100 flex justify-between items-center font-bold">
+              <span className={`flex items-center gap-1.5 ${profitCumul >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                <span className={`w-2 h-2 rounded-full inline-block ${profitCumul >= 0 ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+                Bénéfice Net KDP :
+              </span>
+              <span className={`font-mono-numbers ${profitCumul >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {formatCurrency(profitCumul)}
+              </span>
             </div>
+
+            {point.booksSold > 0 && (
+              <div className="text-[10px] text-slate-400 pt-0.5">
+                Livres vendus ce jour : {point.booksSold} ex.
+              </div>
+            )}
           </div>
         </div>
       );
@@ -290,7 +207,7 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs space-y-5">
       
-      {/* Header with Title and Dual-Curve Summary Badges */}
+      {/* Header with Title and Pop-up Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div>
           <div className="flex items-center gap-2">
@@ -298,130 +215,82 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
               <TrendingUp className="w-4 h-4" />
             </span>
             <h3 className="font-bold text-slate-900 text-sm sm:text-base">
-              Évolution du CA et de la Publicité cumulés avec Double Courbe
+              Évolution du CA et de la Publicité cumulés jour par jour
             </h3>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Deux calculs disponibles : <strong>Bénéfice Réel (KDP)</strong> vs <strong>Bénéfice Espéré (avec ventes Ads)</strong>
+            Suivi factuel des redevances KDP enregistrées et des dépenses Amazon Ads
             {showTrends ? (
               <span className="ml-2 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                ✨ 2 courbes de tendance jusqu'au {projection.daysInMonth} {monthName}
+                ✨ Courbes de tendance jusqu'au {projection.daysInMonth} {monthName}
               </span>
             ) : null}
           </p>
         </div>
 
-        {/* Filter & Pop-up Checkbox Controls */}
-        <div className="flex items-center gap-2 flex-wrap sm:justify-end">
-          
-          {/* Sélecteur de mode 2 courbes */}
-          <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-100 text-xs">
-            <button
-              type="button"
-              onClick={() => handleSetChartMode('dual')}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-                chartMode === 'dual'
-                  ? 'bg-white text-purple-700 shadow-2xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Affiche simultanément les 2 courbes (Réel et Espéré)"
-            >
-              <GitCompare className="w-3 h-3 text-purple-600" />
-              <span>2 Courbes (Réel + Espéré)</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSetChartMode('real_only')}
-              className={`px-2 py-1 rounded-md font-medium transition-all cursor-pointer ${
-                chartMode === 'real_only'
-                  ? 'bg-white text-blue-700 shadow-2xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Affiche uniquement les courbes Réalisées (KDP validé)"
-            >
-              Réel seul
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleSetChartMode('expected_only')}
-              className={`px-2 py-1 rounded-md font-medium transition-all cursor-pointer ${
-                chartMode === 'expected_only'
-                  ? 'bg-white text-purple-700 shadow-2xs font-semibold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Affiche uniquement la trajectoire Espérée (avec Ads)"
-            >
-              Espéré seul
-            </button>
-          </div>
-
-          {/* Coche pour afficher ou masquer le pop-up */}
-          <label 
-            className={`inline-flex items-center gap-2 px-2.5 py-1 text-xs font-semibold rounded-lg border cursor-pointer select-none transition-all shadow-2xs ${
-              showTooltip 
-                ? 'bg-blue-50 text-blue-800 border-blue-300 ring-1 ring-blue-400/30' 
-                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-800'
-            }`}
-            title="Cochez pour afficher le pop-up d'informations au survol, ou décochez pour le masquer complètement et dégager la vue des courbes"
-          >
-            <input
-              type="checkbox"
-              checked={showTooltip}
-              onChange={(e) => handleToggleTooltip(e.target.checked)}
-              className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
-            />
-            <span className="flex items-center gap-1.5">
-              {showTooltip ? (
-                <>
-                  <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                  <span>Pop-up survol : <strong>Actif</strong></span>
-                </>
-              ) : (
-                <>
-                  <EyeOff className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>Afficher pop-up</span>
-                </>
-              )}
-            </span>
-          </label>
-        </div>
+        {/* Coche pour afficher ou masquer le pop-up */}
+        <label 
+          className={`inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer select-none transition-all shadow-2xs self-start sm:self-auto ${
+            showTooltip 
+              ? 'bg-blue-50 text-blue-800 border-blue-300 ring-1 ring-blue-400/30' 
+              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-800'
+          }`}
+          title="Cochez pour afficher le pop-up d'informations au survol, ou décochez pour le masquer complètement et dégager la vue du graphique"
+        >
+          <input
+            type="checkbox"
+            checked={showTooltip}
+            onChange={(e) => handleToggleTooltip(e.target.checked)}
+            className="w-4 h-4 rounded text-blue-600 border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
+          />
+          <span className="flex items-center gap-1.5">
+            {showTooltip ? (
+              <>
+                <Eye className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span>Pop-up survol : <strong>Actif</strong></span>
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>Afficher pop-up</span>
+              </>
+            )}
+          </span>
+        </label>
       </div>
 
-      {/* DUAL METRIC KPI BADGES BAR */}
+      {/* KPI Bilan factuel du mois */}
       {hasData && (
         <div className="flex items-center gap-2.5 flex-wrap p-2.5 bg-slate-50/80 rounded-xl border border-slate-200 text-xs">
-          <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mr-1">
-            <Layers className="w-3.5 h-3.5 text-slate-400" />
-            <span>Les 2 calculs du mois :</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-lg shadow-2xs">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-600 inline-block" />
+            <span>
+              <strong>CA KDP :</strong> <span className="font-mono-numbers font-bold text-blue-700">{formatCurrency(monthRevenue)}</span>
+            </span>
           </div>
 
-          {/* 1. Calcul Réel */}
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-lg shadow-2xs">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 inline-block" />
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
             <span>
-              <strong>Calcul 1 (Réel KDP) :</strong> CA {formatCurrency(monthRevenue)} - Pub {formatCurrency(monthAds)} ={' '}
+              <strong>Pub Ads :</strong> <span className="font-mono-numbers font-bold text-amber-700">{formatCurrency(monthAds)}</span>
+            </span>
+          </div>
+
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-lg shadow-2xs">
+            <span className={`w-2.5 h-2.5 rounded-full inline-block ${monthProfit >= 0 ? 'bg-emerald-600' : 'bg-rose-600'}`} />
+            <span>
+              <strong>Bénéfice Net :</strong>{' '}
               <span className={`font-mono-numbers font-bold ${monthProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                 {formatCurrency(monthProfit)}
               </span>
             </span>
           </div>
 
-          {/* 2. Calcul Espéré */}
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-purple-50/70 border border-purple-200 rounded-lg shadow-2xs">
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-600 inline-block" />
-            <span>
-              <strong>Calcul 2 (Espéré avec Ads) :</strong> CA {formatCurrency(effectiveExpectedRev)} - Pub {formatCurrency(monthAds)} ={' '}
-              <span className={`font-mono-numbers font-bold ${effectiveExpectedProfit >= 0 ? 'text-purple-700' : 'text-rose-700'}`}>
-                {formatCurrency(effectiveExpectedProfit)}
-              </span>
+          <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-slate-200 rounded-lg shadow-2xs">
+            <span className="text-slate-500">TACoS :</span>
+            <span className="font-mono-numbers font-bold text-amber-700">
+              {monthRevenue > 0 ? `${((monthAds / monthRevenue) * 100).toFixed(1)} %` : '—'}
             </span>
-            {effectiveExpectedProfit - monthProfit > 0 && (
-              <span className="text-[10px] font-bold font-mono-numbers bg-purple-200/80 text-purple-900 px-1.5 py-0.2 rounded">
-                +{formatCurrency(effectiveExpectedProfit - monthProfit)}
-              </span>
-            )}
           </div>
         </div>
       )}
@@ -434,7 +303,7 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
             Aucun chiffre enregistré pour {monthName} {selectedYear}
           </p>
           <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-            Saisissez vos chiffres ou utilisez le convertisseur pour tracer immédiatement vos 2 courbes (Réelle et Espérée).
+            Saisissez vos chiffres pour tracer immédiatement l'évolution de vos redevances et bénéfices.
           </p>
         </div>
       ) : (
@@ -442,17 +311,9 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={data} margin={{ top: 15, right: 12, left: -10, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorCumulRev" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0.01} />
-                </linearGradient>
                 <linearGradient id="colorCumulAds" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.18} />
                   <stop offset="95%" stopColor="#f59e0b" stopOpacity={0.01} />
-                </linearGradient>
-                <linearGradient id="colorCumulExpProfit" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#9333ea" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#9333ea" stopOpacity={0.01} />
                 </linearGradient>
               </defs>
 
@@ -464,7 +325,7 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
                 tickLine={false} 
                 tickFormatter={(d) => `${d}`}
                 label={{ 
-                  value: showTrends ? `Jours du mois (1 au ${projection.daysInMonth} ${monthName} - 2 Courbes Réel / Espéré)` : 'Jours du mois', 
+                  value: showTrends ? `Jours du mois (1 au ${projection.daysInMonth} ${monthName})` : 'Jours du mois', 
                   position: 'insideBottom', 
                   offset: -5, 
                   fontSize: 10, 
@@ -491,11 +352,11 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
                 wrapperStyle={{ fontSize: 11, paddingBottom: 6 }} 
               />
 
-              {/* Dépenses Amazon Ads Cumulées (Orange) */}
+              {/* Dépenses Amazon Ads Cumulées (Zone Ambre) */}
               <Area
                 type="monotone"
                 dataKey="cumulAds"
-                name="Pub Ads (€)"
+                name="Pub Ads cumulée (€)"
                 stroke="#f59e0b"
                 strokeWidth={2}
                 fillOpacity={1}
@@ -505,83 +366,37 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
                 connectNulls={false}
               />
 
-              {/* Courbe 1 : Bénéfice Réel KDP (Vert plein) */}
-              {(chartMode === 'dual' || chartMode === 'real_only') && (
-                <Line
-                  type="monotone"
-                  dataKey="cumulProfit"
-                  name="Courbe 1 : Bénéfice Réel KDP (€)"
-                  stroke="#10b981"
-                  strokeWidth={3}
-                  dot={{ r: 3, fill: '#10b981' }}
-                  activeDot={{ r: 6 }}
-                  connectNulls={false}
-                />
-              )}
+              {/* CA KDP Réel Cumulé (Ligne Bleue) */}
+              <Line
+                type="monotone"
+                dataKey="cumulRevenue"
+                name="CA KDP Réel (€)"
+                stroke="#2563eb"
+                strokeWidth={2.5}
+                dot={{ r: 2.5, fill: '#2563eb' }}
+                activeDot={{ r: 5 }}
+                connectNulls={false}
+              />
 
-              {/* Courbe 2 : Bénéfice Espéré avec Ventes Ads (Violet vibrant) */}
-              {(chartMode === 'dual' || chartMode === 'expected_only') && (
-                <Line
-                  type="monotone"
-                  dataKey="cumulExpectedProfit"
-                  name="Courbe 2 : Bénéfice Espéré avec Ads (€)"
-                  stroke="#9333ea"
-                  strokeWidth={3}
-                  strokeDasharray={chartMode === 'dual' ? '4 3' : undefined}
-                  dot={{ r: 3, fill: '#9333ea' }}
-                  activeDot={{ r: 6 }}
-                  connectNulls={false}
-                />
-              )}
+              {/* Bénéfice Net Réel KDP (Ligne Verte en relief) */}
+              <Line
+                type="monotone"
+                dataKey="cumulProfit"
+                name="Bénéfice Net Réel (€)"
+                stroke="#10b981"
+                strokeWidth={3}
+                dot={{ r: 3, fill: '#10b981' }}
+                activeDot={{ r: 6 }}
+                connectNulls={false}
+              />
 
-              {/* CA Réel (Bleu) */}
-              {(chartMode === 'dual' || chartMode === 'real_only') && (
+              {/* Courbes de tendances jusqu'à la fin du mois (dès 3 entrées) */}
+              {showTrends && (
                 <Line
                   type="monotone"
-                  dataKey="cumulRevenue"
-                  name="CA Réel KDP (€)"
+                  dataKey="trendRevenue"
+                  name="Tendance CA KDP"
                   stroke="#2563eb"
-                  strokeWidth={2}
-                  dot={{ r: 2, fill: '#2563eb' }}
-                  activeDot={{ r: 4 }}
-                  connectNulls={false}
-                />
-              )}
-
-              {/* CA Espéré (Bleu indigo pointillé si distinct) */}
-              {(chartMode === 'dual' || chartMode === 'expected_only') && hasExpectedDelta && (
-                <Line
-                  type="monotone"
-                  dataKey="cumulExpectedRevenue"
-                  name="CA Espéré Total (€)"
-                  stroke="#6366f1"
-                  strokeWidth={1.5}
-                  strokeDasharray="3 3"
-                  dot={false}
-                  connectNulls={false}
-                />
-              )}
-
-              {/* Tendances fin de mois (si >= 3 entrées) */}
-              {showTrends && (chartMode === 'dual' || chartMode === 'real_only') && (
-                <Line
-                  type="monotone"
-                  dataKey="trendProfit"
-                  name="Tendance Bénéfice Réel"
-                  stroke="#10b981"
-                  strokeWidth={1.5}
-                  strokeDasharray="4 4"
-                  dot={false}
-                  connectNulls={true}
-                />
-              )}
-
-              {showTrends && (chartMode === 'dual' || chartMode === 'expected_only') && (
-                <Line
-                  type="monotone"
-                  dataKey="trendExpectedProfit"
-                  name="Tendance Bénéfice Espéré"
-                  stroke="#9333ea"
                   strokeWidth={1.5}
                   strokeDasharray="4 4"
                   dot={false}
@@ -601,28 +416,41 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
                   connectNulls={true}
                 />
               )}
+
+              {showTrends && (
+                <Line
+                  type="monotone"
+                  dataKey="trendProfit"
+                  name="Tendance Bénéfice"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  connectNulls={true}
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
 
       {/* ========================================================================= */}
-      {/* SYNTHÈSE DESSOUS LE GRAPHIQUE (ACTIVÉE DÈS 3 ENTRÉES)                     */}
+      {/* SYNTHÈSE DESSOUS LE GRAPHIQUE (DÈS 3 ENTRÉES)                             */}
       {/* ========================================================================= */}
       {showTrends ? (
-        <div className="bg-gradient-to-br from-slate-50 via-white to-purple-50/40 rounded-xl border border-purple-200/90 p-4 sm:p-5 shadow-xs space-y-4">
+        <div className="bg-gradient-to-br from-slate-50 via-white to-blue-50/40 rounded-xl border border-blue-200/90 p-4 sm:p-5 shadow-xs space-y-4">
           
           {/* Header de la synthèse */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-100 pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-100 pb-3">
             <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shadow-xs">
+              <span className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-xs">
                 <Sparkles className="w-4 h-4" />
               </span>
               <div>
                 <h4 className="font-bold text-slate-900 text-sm sm:text-base flex items-center gap-2">
-                  <span>Synthèse Prévisionnelle Fin de Mois : 2 Trajectoires</span>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800">
-                    Tendance basée sur {projection.entryCount} jours
+                  <span>Synthèse Prévisionnelle Fin de Mois</span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                    Basée sur {projection.entryCount} jours enregistrés
                   </span>
                 </h4>
                 <p className="text-xs text-slate-500">
@@ -637,80 +465,58 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
             </div>
           </div>
 
-          {/* Grille des 4 indicateurs prévisionnels avec les 2 calculs */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Grille des indicateurs prévisionnels */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
             
-            {/* 1. Bénéfice Réel vs Bénéfice Espéré Fin de Mois */}
-            <div className="bg-white p-3.5 rounded-xl border border-purple-200 shadow-2xs space-y-1 sm:col-span-2">
+            {/* 1. Bénéfice Net Projeté Fin de Mois */}
+            <div className="bg-white p-3.5 rounded-xl border border-emerald-200 shadow-2xs space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-purple-900 uppercase tracking-wider">
-                  Bénéfice Net Projeté Fin de Mois (2 Calculs)
+                <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">
+                  Bénéfice Net Projeté
                 </span>
-                <span className="text-[10px] font-semibold bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded">
-                  Double Trajectoire
+                <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                  Fin de mois
                 </span>
               </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                {/* Calcul 1 : Réalisé KDP */}
-                <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200">
-                  <div className="text-[11px] text-slate-500 font-semibold flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block" />
-                    1. Calcul Réel KDP :
-                  </div>
-                  <div className={`text-xl sm:text-2xl font-bold font-mono-numbers mt-0.5 ${
-                    projection.projectedEndProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                  }`}>
-                    {formatCurrency(projection.projectedEndProfit)}
-                  </div>
-                  <div className="text-[10px] text-slate-400 mt-0.5">
-                    Marge : {formatPercent(projection.projectedEndMargin)}
-                  </div>
-                </div>
-
-                {/* Calcul 2 : Espéré avec Ads */}
-                <div className="p-2.5 bg-purple-50/70 rounded-lg border border-purple-200">
-                  <div className="text-[11px] text-purple-800 font-semibold flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-purple-600 inline-block" />
-                    2. Calcul Espéré (+ Ads) :
-                  </div>
-                  <div className={`text-xl sm:text-2xl font-bold font-mono-numbers mt-0.5 ${
-                    projection.projectedEndExpectedProfit >= 0 ? 'text-purple-700' : 'text-rose-600'
-                  }`}>
-                    {formatCurrency(projection.projectedEndExpectedProfit)}
-                  </div>
-                  <div className="text-[10px] text-purple-600 font-medium mt-0.5">
-                    Écart : +{formatCurrency(projection.projectedEndExpectedProfit - projection.projectedEndProfit)}
-                  </div>
-                </div>
+              <div className={`text-2xl sm:text-3xl font-bold font-mono-numbers mt-1 ${
+                projection.projectedEndProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+              }`}>
+                {formatCurrency(projection.projectedEndProfit)}
               </div>
-
-              <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-100 flex items-center justify-between">
-                <span>Rythme de gain quotidien :</span>
-                <span className="font-semibold text-emerald-700 font-mono-numbers">
-                  +{formatCurrency(projection.dailyAvgProfit)}/j (réel) · +{formatCurrency(projection.dailyAvgExpectedProfit)}/j (espéré)
-                </span>
+              <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-100 space-y-0.5">
+                <div className="flex justify-between">
+                  <span>Marge nette projetée :</span>
+                  <span className="font-bold font-mono-numbers text-emerald-700">
+                    {formatPercent(projection.projectedEndMargin)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Rythme quotidien :</span>
+                  <span className="font-mono-numbers">
+                    +{formatCurrency(projection.dailyAvgProfit)} / j
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* 2. CA Estimé Fin de Mois */}
-            <div className="bg-white p-3.5 rounded-xl border border-blue-100 shadow-2xs space-y-1">
+            <div className="bg-white p-3.5 rounded-xl border border-blue-200 shadow-2xs space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-blue-900 uppercase tracking-wider">
-                  CA Estimé Fin de Mois
+                  CA KDP Estimé
                 </span>
                 <span className="w-5 h-5 rounded-md bg-blue-50 text-blue-600 flex items-center justify-center">
                   <DollarSign className="w-3 h-3" />
                 </span>
               </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono-numbers text-blue-700">
+              <div className="text-2xl sm:text-3xl font-bold font-mono-numbers text-blue-700 mt-1">
                 {formatCurrency(projection.projectedEndRevenue)}
               </div>
-              <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 space-y-0.5">
+              <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-100 space-y-0.5">
                 <div className="flex justify-between">
-                  <span>CA Espéré total :</span>
-                  <span className="font-semibold text-purple-700 font-mono-numbers">
-                    {formatCurrency(projection.projectedEndExpectedRevenue)}
+                  <span>Cumul actuel :</span>
+                  <span className="font-mono-numbers font-semibold">
+                    {formatCurrency(projection.currentCumulRevenue)}
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-400">
@@ -723,39 +529,31 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
             </div>
 
             {/* 3. Amazon Ads Estimé Fin de Mois */}
-            <div className="bg-white p-3.5 rounded-xl border border-amber-100 shadow-2xs space-y-1">
+            <div className="bg-white p-3.5 rounded-xl border border-amber-200 shadow-2xs space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
-                  Pub Estimée Fin de Mois
+                  Pub Ads Estimée
                 </span>
                 <span className="w-5 h-5 rounded-md bg-amber-50 text-amber-600 flex items-center justify-center">
                   <Megaphone className="w-3 h-3" />
                 </span>
               </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono-numbers text-amber-600">
+              <div className="text-2xl sm:text-3xl font-bold font-mono-numbers text-amber-600 mt-1">
                 {formatCurrency(projection.projectedEndAds)}
               </div>
-              <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-100 space-y-0.5">
+              <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-100 space-y-0.5">
                 <div className="flex justify-between">
-                  <span>Budget quotidien :</span>
-                  <span className="font-semibold text-amber-700 font-mono-numbers">
-                    {formatCurrency(projection.dailyAvgAds)} / j
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-500">
                   <span>TACoS Réel projeté :</span>
-                  <span className="font-mono-numbers font-semibold text-amber-700">
+                  <span className="font-mono-numbers font-bold text-amber-700">
                     {projection.projectedEndTacos.toFixed(1)} %
                   </span>
                 </div>
-                {Math.abs(projection.projectedEndExpectedRevenue - projection.projectedEndRevenue) >= 0.01 && (
-                  <div className="flex justify-between text-purple-700">
-                    <span>TACoS Espéré projeté :</span>
-                    <span className="font-mono-numbers font-semibold">
-                      {projection.projectedEndExpectedTacos.toFixed(1)} %
-                    </span>
-                  </div>
-                )}
+                <div className="flex justify-between text-slate-400">
+                  <span>Budget quotidien :</span>
+                  <span className="font-mono-numbers">
+                    {formatCurrency(projection.dailyAvgAds)} / j
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -839,10 +637,10 @@ export const CumulativeMonthChart: React.FC<CumulativeMonthChartProps> = ({
               </span>
               <div>
                 <h4 className="font-bold text-slate-800 text-sm">
-                  Débloquez les 2 courbes de tendance jusqu'au {projection.daysInMonth} {monthName}
+                  Débloquez les courbes de tendance jusqu'au {projection.daysInMonth} {monthName}
                 </h4>
                 <p className="text-slate-500 mt-0.5">
-                  Dès <strong>3 entrées enregistrées</strong> pour ce mois, l'application tracera automatiquement les 2 courbes de tendance prévisionnelles (CA KDP et Amazon Ads) jusqu'au dernier jour du mois avec la synthèse complète des deux calculs.
+                  Dès <strong>3 entrées enregistrées</strong> pour ce mois, l'application tracera automatiquement les courbes de tendance prévisionnelles (CA KDP, Pub et Bénéfice) jusqu'au dernier jour du mois avec la synthèse complète.
                 </p>
               </div>
             </div>

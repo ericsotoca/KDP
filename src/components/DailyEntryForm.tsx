@@ -20,11 +20,8 @@ import {
   ArrowLeft,
   Zap,
   Clock,
-  Sparkles,
-  TrendingUp,
   Layers
 } from 'lucide-react';
-import { AdsGrossToNetConverter } from './AdsGrossToNetConverter';
 
 interface DailyEntryFormProps {
   entries: DailyEntry[];
@@ -35,8 +32,7 @@ interface DailyEntryFormProps {
     month: number, 
     revenue: number, 
     adsCost: number, 
-    booksSold?: number, 
-    expectedRevenue?: number
+    booksSold?: number
   ) => void;
   onCancelEdit: () => void;
   setActiveTab: (tab: ActiveTab) => void;
@@ -50,7 +46,7 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
   onCancelEdit,
   setActiveTab,
 }) => {
-  // Mode: 'monthly' (just 2-3 numbers for the month) vs 'daily' (day-by-day)
+  // Mode: 'monthly' (just 2 numbers for the month) vs 'daily' (day-by-day)
   const [entryMode, setEntryMode] = useState<'monthly' | 'daily'>('monthly');
 
   // --- State for Mode 1: Saisie rapide mensuelle ---
@@ -58,25 +54,18 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
   const [monthlyYear, setMonthlyYear] = useState<number>(now.getFullYear());
   const [monthlyMonth, setMonthlyMonth] = useState<number>(now.getMonth() + 1);
   const [monthlyRevenue, setMonthlyRevenue] = useState<string>('');
-  const [monthlyExpectedRevenue, setMonthlyExpectedRevenue] = useState<string>('');
   const [monthlyAds, setMonthlyAds] = useState<string>('');
   const [monthlyBooks, setMonthlyBooks] = useState<string>('');
 
   // Pre-load existing month figures if already present
   useEffect(() => {
     const metrics = getMonthMetrics(entries, monthlyYear, monthlyMonth);
-    if (metrics.monthRevenue > 0 || metrics.monthExpectedRevenue > 0 || metrics.monthAds > 0) {
+    if (metrics.monthRevenue > 0 || metrics.monthAds > 0) {
       setMonthlyRevenue(metrics.monthRevenue ? metrics.monthRevenue.toString() : '');
-      setMonthlyExpectedRevenue(
-        metrics.monthExpectedRevenue && metrics.monthExpectedRevenue !== metrics.monthRevenue
-          ? metrics.monthExpectedRevenue.toString()
-          : ''
-      );
       setMonthlyAds(metrics.monthAds ? metrics.monthAds.toString() : '');
       setMonthlyBooks(metrics.monthBooks ? metrics.monthBooks.toString() : '');
     } else {
       setMonthlyRevenue('');
-      setMonthlyExpectedRevenue('');
       setMonthlyAds('');
       setMonthlyBooks('');
     }
@@ -85,7 +74,6 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
   // --- State for Mode 2: Saisie quotidienne ---
   const [date, setDate] = useState<string>(getTodayDateString());
   const [revenue, setRevenue] = useState<string>('');
-  const [expectedRevenue, setExpectedRevenue] = useState<string>('');
   const [adsCost, setAdsCost] = useState<string>('');
   const [booksSold, setBooksSold] = useState<string>('');
   const [comment, setComment] = useState<string>('');
@@ -97,11 +85,6 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
       setEntryMode('daily');
       setDate(editingEntry.date);
       setRevenue(editingEntry.revenue.toString());
-      setExpectedRevenue(
-        editingEntry.expectedRevenue && editingEntry.expectedRevenue !== editingEntry.revenue
-          ? editingEntry.expectedRevenue.toString()
-          : ''
-      );
       setAdsCost(editingEntry.adsCost.toString());
       setBooksSold(editingEntry.booksSold != null ? editingEntry.booksSold.toString() : '');
       setComment(editingEntry.comment || '');
@@ -116,76 +99,28 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
   const handleLoadExistingDaily = () => {
     if (existingForDate) {
       setRevenue(existingForDate.revenue.toString());
-      setExpectedRevenue(
-        existingForDate.expectedRevenue && existingForDate.expectedRevenue !== existingForDate.revenue
-          ? existingForDate.expectedRevenue.toString()
-          : ''
-      );
       setAdsCost(existingForDate.adsCost.toString());
       setBooksSold(existingForDate.booksSold != null ? existingForDate.booksSold.toString() : '');
       setComment(existingForDate.comment || '');
     }
   };
 
-  // Calculations for Monthly Mode (Dual calculations: Real vs Expected)
+  // Calculations for Monthly Mode
   const numMonthlyRev = parseFloat(monthlyRevenue.replace(',', '.')) || 0;
-  const numMonthlyExpRev = monthlyExpectedRevenue 
-    ? parseFloat(monthlyExpectedRevenue.replace(',', '.')) || numMonthlyRev 
-    : numMonthlyRev;
   const numMonthlyAds = parseFloat(monthlyAds.replace(',', '.')) || 0;
   const numMonthlyBooks = monthlyBooks ? parseInt(monthlyBooks, 10) : undefined;
   
-  // Calcul 1 : Réalisé KDP
   const monthlyProfit = numMonthlyRev - numMonthlyAds;
   const monthlyMargin = numMonthlyRev > 0 ? (monthlyProfit / numMonthlyRev) * 100 : 0;
-  const monthlyAcos = numMonthlyRev > 0 ? (numMonthlyAds / numMonthlyRev) * 100 : 0;
-  const monthlyTacos = monthlyAcos;
+  const monthlyTacos = numMonthlyRev > 0 ? (numMonthlyAds / numMonthlyRev) * 100 : 0;
   const monthlyRoas = numMonthlyAds > 0 ? numMonthlyRev / numMonthlyAds : 0;
-
-  // Calcul 2 : Espéré avec Ads
-  const monthlyExpectedProfit = numMonthlyExpRev - numMonthlyAds;
-  const monthlyExpectedMargin = numMonthlyExpRev > 0 ? (monthlyExpectedProfit / numMonthlyExpRev) * 100 : 0;
-  const monthlyExpectedTacos = numMonthlyExpRev > 0 ? (numMonthlyAds / numMonthlyExpRev) * 100 : 0;
 
   // Calculations for Daily Mode
   const numRevenue = parseFloat(revenue.replace(',', '.')) || 0;
-  const numExpectedRevenue = expectedRevenue 
-    ? parseFloat(expectedRevenue.replace(',', '.')) || numRevenue 
-    : numRevenue;
   const numAds = parseFloat(adsCost.replace(',', '.')) || 0;
   const numBooks = booksSold ? parseInt(booksSold, 10) : undefined;
   const estimatedProfit = numRevenue - numAds;
-  const estimatedExpectedProfit = numExpectedRevenue - numAds;
   const estimatedMargin = numRevenue > 0 ? (estimatedProfit / numRevenue) * 100 : 0;
-
-  // Handlers for Ads Gross -> Net Royalty Converter
-  const handleApplyNetToMonthly = (netAmount: number, target: 'real' | 'expected', mode: 'add' | 'replace') => {
-    if (target === 'expected') {
-      const current = monthlyExpectedRevenue 
-        ? parseFloat(monthlyExpectedRevenue.replace(',', '.')) || 0
-        : numMonthlyRev;
-      const nextVal = mode === 'add' ? Math.round((current + netAmount) * 100) / 100 : netAmount;
-      setMonthlyExpectedRevenue(nextVal.toFixed(2));
-    } else {
-      const current = numMonthlyRev;
-      const nextVal = mode === 'add' ? Math.round((current + netAmount) * 100) / 100 : netAmount;
-      setMonthlyRevenue(nextVal.toFixed(2));
-    }
-  };
-
-  const handleApplyNetToDaily = (netAmount: number, target: 'real' | 'expected', mode: 'add' | 'replace') => {
-    if (target === 'expected') {
-      const current = expectedRevenue 
-        ? parseFloat(expectedRevenue.replace(',', '.')) || 0
-        : numRevenue;
-      const nextVal = mode === 'add' ? Math.round((current + netAmount) * 100) / 100 : netAmount;
-      setExpectedRevenue(nextVal.toFixed(2));
-    } else {
-      const current = numRevenue;
-      const nextVal = mode === 'add' ? Math.round((current + netAmount) * 100) / 100 : netAmount;
-      setRevenue(nextVal.toFixed(2));
-    }
-  };
 
   // Handle submit Monthly Mode
   const handleMonthlySubmit = (e: React.FormEvent) => {
@@ -195,18 +130,17 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
       monthlyMonth,
       numMonthlyRev,
       numMonthlyAds,
-      numMonthlyBooks,
-      numMonthlyExpRev !== numMonthlyRev ? numMonthlyExpRev : undefined
+      numMonthlyBooks
     );
 
     setSuccessMessage(
-      `Vos chiffres pour ${getMonthNameFr(monthlyMonth)} ${monthlyYear} ont été enregistrés ! Les 2 calculs et les 2 courbes sont synchronisés.`
+      `Vos chiffres factuels pour ${getMonthNameFr(monthlyMonth)} ${monthlyYear} ont été enregistrés !`
     );
 
     setTimeout(() => {
       setSuccessMessage(null);
       setActiveTab('dashboard');
-    }, 2200);
+    }, 2000);
   };
 
   // Handle submit Daily Mode
@@ -220,7 +154,6 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
       {
         date,
         revenue: Math.max(0, numRevenue),
-        expectedRevenue: numExpectedRevenue !== numRevenue ? Math.max(0, numExpectedRevenue) : undefined,
         adsCost: Math.max(0, numAds),
         booksSold: numBooks !== undefined && !isNaN(numBooks) ? Math.max(0, numBooks) : undefined,
         comment: comment.trim() || undefined,
@@ -250,10 +183,10 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
       <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-            Saisie des chiffres KDP & Ads (Deux Calculs)
+            Saisie des chiffres KDP & Amazon Ads
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Gérez à la fois votre <strong>CA Réel KDP</strong> et votre <strong>CA Espéré</strong> (ventes Ads) pour alimenter les 2 courbes
+            Enregistrez vos redevances factuelles KDP et vos dépenses publicitaires
           </p>
         </div>
 
@@ -309,10 +242,10 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
               </span>
               <div>
                 <h3 className="font-bold text-slate-900 text-base">
-                  Saisie directe du mois avec Double Calcul
+                  Saisie directe du mois (2 chiffres)
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Enregistrez vos chiffres réels et espérés pour tracer instantanément vos 2 courbes
+                  Idéal pour enregistrer rapidement votre CA KDP réel et vos dépenses Amazon Ads
                 </p>
               </div>
             </div>
@@ -345,8 +278,8 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
             </div>
           </div>
 
-          {/* THE 3 INPUTS (Real Rev, Expected Rev, Ads Cost) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {/* THE 2 INPUTS (Real Rev, Ads Cost) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             
             {/* 1. CHIFFRE D'AFFAIRES KDP RÉEL DU MOIS */}
             <div className="bg-blue-50/60 p-4 rounded-xl border border-blue-200">
@@ -356,11 +289,11 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
                   CA KDP Réel (€)
                 </label>
                 <span className="text-[10px] font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded">
-                  Confirmé
+                  Enregistré avec certitude
                 </span>
               </div>
               <p className="text-[11px] text-blue-700/80 mb-2">
-                Redevances validées sur KDP
+                Redevances validées sur les rapports KDP
               </p>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-600 font-bold text-sm">
@@ -380,49 +313,19 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
               </div>
             </div>
 
-            {/* 2. CHIFFRE D'AFFAIRES ESPÉRÉ DU MOIS */}
-            <div className="bg-purple-50/60 p-4 rounded-xl border border-purple-200">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded-full bg-purple-600 text-white text-[10px] flex items-center justify-center font-bold">2</span>
-                  CA Espéré Total (€)
-                </label>
-                <span className="text-[10px] font-semibold text-purple-700 bg-purple-100 px-1.5 py-0.2 rounded">
-                  2ème Courbe
-                </span>
-              </div>
-              <p className="text-[11px] text-purple-700/80 mb-2">
-                CA Réel + redevances Ads en attente
-              </p>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-600 font-bold text-sm">
-                  €
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder={monthlyRevenue || '0.00'}
-                  value={monthlyExpectedRevenue}
-                  onChange={(e) => setMonthlyExpectedRevenue(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 text-xl font-bold font-mono-numbers bg-white border border-purple-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 text-purple-800"
-                />
-              </div>
-            </div>
-
-            {/* 3. DÉPENSES AMAZON ADS DU MOIS */}
+            {/* 2. DÉPENSES AMAZON ADS DU MOIS */}
             <div className="bg-amber-50/60 p-4 rounded-xl border border-amber-200">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                  <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+                  <span className="w-4 h-4 rounded-full bg-amber-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
                   Amazon Ads du mois (€)
                 </label>
                 <span className="text-[10px] font-semibold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded">
-                  Dépenses
+                  Dépenses facturées
                 </span>
               </div>
               <p className="text-[11px] text-amber-800/80 mb-2">
-                Dépenses publicitaires totales
+                Dépenses publicitaires totales de la console Ads
               </p>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-amber-600 font-bold text-sm">
@@ -442,13 +345,6 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
             </div>
 
           </div>
-
-          {/* Proposition 1 : Convertisseur intelligent CA Brut Ads -> Redevance Nette Estimée */}
-          <AdsGrossToNetConverter
-            currentRevenue={numMonthlyRev}
-            currentExpectedRevenue={numMonthlyExpRev}
-            onApplyNetRevenue={handleApplyNetToMonthly}
-          />
 
           {/* Champ facultatif : Livres vendus */}
           <div className="max-w-xs">
@@ -471,18 +367,18 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
             </div>
           </div>
 
-          {/* Real-time Result Preview with the 2 Calculations */}
+          {/* Real-time Result Preview */}
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
             <div className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
               <Layers className="w-3.5 h-3.5 text-slate-400" />
-              <span>Les deux calculs du bilan pour {getMonthNameFr(monthlyMonth)} {monthlyYear} :</span>
+              <span>Bilan calculé pour {getMonthNameFr(monthlyMonth)} {monthlyYear} :</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Calcul 1 : Bénéfice Réel */}
+              {/* Bénéfice Net Réel */}
               <div className="bg-white p-3 rounded-lg border border-slate-200">
                 <span className="text-[11px] text-slate-500 block font-semibold text-emerald-800">
-                  1. Bénéfice Réel (KDP)
+                  Bénéfice Net KDP
                 </span>
                 <span className={`text-xl font-bold font-mono-numbers ${
                   monthlyProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
@@ -490,41 +386,42 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
                   {formatCurrency(monthlyProfit)}
                 </span>
                 <span className="text-[10px] text-slate-400 block mt-0.5">
-                  Marge : {numMonthlyRev > 0 ? formatPercent(monthlyMargin) : '0,0 %'}
+                  CA ({formatCurrency(numMonthlyRev)}) - Ads ({formatCurrency(numMonthlyAds)})
                 </span>
               </div>
 
-              {/* Calcul 2 : Bénéfice Espéré */}
-              <div className="bg-purple-50/70 p-3 rounded-lg border border-purple-200">
-                <span className="text-[11px] text-purple-900 block font-semibold">
-                  2. Bénéfice Espéré (+ Ads)
-                </span>
-                <span className={`text-xl font-bold font-mono-numbers ${
-                  monthlyExpectedProfit >= 0 ? 'text-purple-700' : 'text-rose-600'
-                }`}>
-                  {formatCurrency(monthlyExpectedProfit)}
-                </span>
-                <span className="text-[10px] text-purple-600 block mt-0.5 font-mono-numbers">
-                  Écart : +{formatCurrency(Math.max(0, monthlyExpectedProfit - monthlyProfit))}
-                </span>
-              </div>
-
+              {/* Marge Réelle */}
               <div className="bg-white p-3 rounded-lg border border-slate-200">
-                <span className="text-[11px] text-slate-500 block">TACoS (Part pub/CA)</span>
+                <span className="text-[11px] text-slate-500 block">Marge Bénéficiaire</span>
+                <span className={`text-xl font-bold font-mono-numbers ${
+                  monthlyMargin >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                }`}>
+                  {numMonthlyRev > 0 ? formatPercent(monthlyMargin) : '0,0 %'}
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  Part conservée du CA
+                </span>
+              </div>
+
+              {/* TACoS Réel */}
+              <div className="bg-white p-3 rounded-lg border border-slate-200">
+                <span className="text-[11px] text-slate-500 block">TACoS Réel (Pub/CA)</span>
                 <span className="text-xl font-bold font-mono-numbers text-amber-600">
                   {monthlyTacos > 0 ? `${monthlyTacos.toFixed(1)} %` : '—'}
                 </span>
-                {Math.abs(numMonthlyExpRev - numMonthlyRev) >= 0.01 && (
-                  <span className="text-[10px] text-purple-600 block mt-0.5">
-                    Espéré : {monthlyExpectedTacos.toFixed(1)} %
-                  </span>
-                )}
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  {monthlyTacos <= 25 ? 'Zone saine & rentable' : 'Part pub'}
+                </span>
               </div>
 
+              {/* ROAS */}
               <div className="bg-white p-3 rounded-lg border border-slate-200">
                 <span className="text-[11px] text-slate-500 block">ROAS (Retour pub)</span>
                 <span className="text-xl font-bold font-mono-numbers text-blue-700">
                   {monthlyRoas > 0 ? `${monthlyRoas.toFixed(2)}x` : '—'}
+                </span>
+                <span className="text-[10px] text-slate-400 block mt-0.5">
+                  CA KDP / Dépenses Ads
                 </span>
               </div>
             </div>
@@ -533,7 +430,7 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
           {/* Submit Button */}
           <div className="flex items-center justify-between pt-2">
             <p className="text-xs text-slate-500">
-              ℹ️ L'enregistrement mettra à jour l'ensemble des graphiques et tracera les <strong>2 courbes</strong>.
+              ℹ️ L'enregistrement mettra à jour l'ensemble des indicateurs et graphiques du tableau de bord.
             </p>
 
             <button
@@ -560,7 +457,7 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
                 {editingEntry ? 'Modifier une saisie journalière' : 'Saisie quotidienne (jour par jour)'}
               </h3>
               <p className="text-xs text-slate-500">
-                Enregistrez vos statistiques au jour le jour avec CA Réel et CA Espéré
+                Enregistrez vos redevances et dépenses publicitaires du jour
               </p>
             </div>
 
@@ -662,33 +559,8 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
               </div>
             </div>
 
-            {/* CA Espéré du jour (€) */}
-            <div>
-              <label className="block text-xs font-semibold text-purple-900 mb-1.5 flex items-center justify-between">
-                <span>CA Espéré du jour (€) (avec ventes Ads)</span>
-                <span className="text-[10px] font-normal text-purple-600">Alimente la 2ème courbe</span>
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-500">
-                  <TrendingUp className="w-4 h-4" />
-                </div>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder={revenue || '0.00'}
-                  value={expectedRevenue}
-                  onChange={(e) => setExpectedRevenue(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-sm font-semibold bg-purple-50/50 border border-purple-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all font-mono-numbers text-purple-800 text-lg"
-                />
-                <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs font-bold text-slate-400">
-                  €
-                </span>
-              </div>
-            </div>
-
             {/* Dépenses Amazon Ads du jour (€) */}
-            <div className="md:col-span-2">
+            <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Dépenses Amazon Ads du jour (€) <span className="text-rose-500">*</span>
               </label>
@@ -713,13 +585,6 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
             </div>
           </div>
 
-          {/* Proposition 1 : Convertisseur intelligent CA Brut Ads -> Redevance Nette Estimée */}
-          <AdsGrossToNetConverter
-            currentRevenue={numRevenue}
-            currentExpectedRevenue={numExpectedRevenue}
-            onApplyNetRevenue={handleApplyNetToDaily}
-          />
-
           {/* Commentaire facultatif */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -739,11 +604,11 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
             </div>
           </div>
 
-          {/* Live Calculation: Dual Result Preview */}
+          {/* Live Calculation: Result Preview */}
           <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
               <div>
-                <span className="text-slate-500 block">1. Bénéfice Réel :</span>
+                <span className="text-slate-500 block">Bénéfice du jour :</span>
                 <span className={`text-lg font-bold font-mono-numbers ${
                   estimatedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                 }`}>
@@ -751,16 +616,8 @@ export const DailyEntryForm: React.FC<DailyEntryFormProps> = ({
                 </span>
               </div>
               <div>
-                <span className="text-purple-700 block font-semibold">2. Bénéfice Espéré :</span>
-                <span className={`text-lg font-bold font-mono-numbers ${
-                  estimatedExpectedProfit >= 0 ? 'text-purple-700' : 'text-rose-600'
-                }`}>
-                  {formatCurrency(estimatedExpectedProfit)}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500 block">Marge réelle :</span>
-                <span className="text-sm font-bold font-mono-numbers text-slate-700">
+                <span className="text-slate-500 block">Marge nette :</span>
+                <span className="text-base font-bold font-mono-numbers text-slate-700">
                   {numRevenue > 0 ? formatPercent(estimatedMargin) : '0,0 %'}
                 </span>
               </div>

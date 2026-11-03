@@ -8,16 +8,11 @@ import {
 import { 
   Calculator, 
   X, 
-  TrendingUp, 
   Megaphone, 
   DollarSign, 
   Sparkles, 
-  Info, 
-  CheckCircle2, 
-  AlertTriangle, 
   Target, 
   HelpCircle,
-  ArrowRight,
   ShieldCheck,
   Zap
 } from 'lucide-react';
@@ -26,33 +21,25 @@ interface TacosCalculatorModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultRevenue?: number;
-  defaultExpectedRevenue?: number;
   defaultAds?: number;
   selectedMonth?: number;
   selectedYear?: number;
-  onApplySimulatedValues?: (ads: number, revenue: number, expectedRevenue?: number) => void;
+  onApplySimulatedValues?: (ads: number, revenue: number) => void;
 }
 
 export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
   isOpen,
   onClose,
   defaultRevenue = 0,
-  defaultExpectedRevenue,
   defaultAds = 0,
   selectedMonth,
   selectedYear,
-  onApplySimulatedValues,
 }) => {
   if (!isOpen) return null;
 
   // Simulator inputs
   const [revenueInput, setRevenueInput] = useState<string>(
     defaultRevenue > 0 ? defaultRevenue.toString() : '500'
-  );
-  const [expectedRevenueInput, setExpectedRevenueInput] = useState<string>(
-    defaultExpectedRevenue && defaultExpectedRevenue !== defaultRevenue 
-      ? defaultExpectedRevenue.toString() 
-      : ''
   );
   const [adsInput, setAdsInput] = useState<string>(
     defaultAds > 0 ? defaultAds.toString() : '100'
@@ -67,38 +54,25 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
 
   // Parsed values
   const rev = Math.max(0, parseFloat(revenueInput.replace(',', '.')) || 0);
-  const expRev = expectedRevenueInput 
-    ? Math.max(0, parseFloat(expectedRevenueInput.replace(',', '.')) || rev) 
-    : rev;
   const ads = Math.max(0, parseFloat(adsInput.replace(',', '.')) || 0);
   const adsDirectSales = Math.max(0, parseFloat(adsAttributedSalesInput.replace(',', '.')) || 0);
 
   // Calculations
   const tacosReal = rev > 0 ? (ads / rev) * 100 : 0;
-  const tacosExpected = expRev > 0 ? (ads / expRev) * 100 : 0;
   const acosDirect = adsDirectSales > 0 ? (ads / adsDirectSales) * 100 : 0;
 
   const profitReal = rev - ads;
-  const profitExpected = expRev - ads;
   const marginReal = rev > 0 ? (profitReal / rev) * 100 : 0;
 
   const diagnosticReal = getTacosDiagnostic(tacosReal, ads, rev);
-  const diagnosticExpected = getTacosDiagnostic(tacosExpected, ads, expRev);
 
   // Target reverse calculations
-  // Target TACoS = (Ads / CA) * 100  =>  Max Ads = (Target TACoS * CA) / 100
   const maxAdsAllowed = (targetTacosPercent / 100) * rev;
-  // Target TACoS = (Ads / CA) * 100  =>  Min CA = Ads / (Target TACoS / 100)
   const minRevenueRequired = targetTacosPercent > 0 ? ads / (targetTacosPercent / 100) : 0;
 
   // Reset / Preload actual month values
   const handleLoadCurrentMonth = () => {
     setRevenueInput(defaultRevenue > 0 ? defaultRevenue.toString() : '0');
-    setExpectedRevenueInput(
-      defaultExpectedRevenue && defaultExpectedRevenue !== defaultRevenue
-        ? defaultExpectedRevenue.toString()
-        : ''
-    );
     setAdsInput(defaultAds > 0 ? defaultAds.toString() : '0');
   };
 
@@ -127,7 +101,7 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-amber-100 mt-0.5">
-                Total Advertising Cost of Sales : l'indicateur reine de la rentabilité de vos livres
+                Total Advertising Cost of Sales : l'indicateur de référence de la rentabilité de vos livres
               </p>
             </div>
           </div>
@@ -208,13 +182,13 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
               )}
 
               {/* Input Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 
                 {/* 1. Dépenses Amazon Ads */}
                 <div className="p-3.5 bg-amber-50/50 rounded-xl border border-amber-200 space-y-1.5">
                   <label className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
                     <Megaphone className="w-3.5 h-3.5 text-amber-600" />
-                    <span>1. Dépenses Amazon Ads (€)</span>
+                    <span>1. Amazon Ads (€)</span>
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-amber-600 pointer-events-none">
@@ -231,7 +205,7 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                     />
                   </div>
                   <p className="text-[11px] text-amber-700/80">
-                    Facturé par la régie Amazon Ads
+                    Dépenses Amazon Ads
                   </p>
                 </div>
 
@@ -239,7 +213,7 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                 <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-200 space-y-1.5">
                   <label className="text-xs font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1.5">
                     <DollarSign className="w-3.5 h-3.5 text-blue-600" />
-                    <span>2. CA Total KDP Réel (€)</span>
+                    <span>2. CA KDP Réel (€)</span>
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-blue-600 pointer-events-none">
@@ -256,45 +230,15 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                     />
                   </div>
                   <p className="text-[11px] text-blue-700/80">
-                    Redevances totales KDP (organique + pubs)
+                    Redevances validées sur KDP
                   </p>
                 </div>
 
-                {/* 3. Optionnel : CA Espéré avec Ads en attente */}
-                <div className="p-3.5 bg-purple-50/50 rounded-xl border border-purple-200 space-y-1.5">
-                  <label className="text-xs font-bold text-purple-900 uppercase tracking-wider flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
-                      <span>3. CA Espéré Total (Optionnel)</span>
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-purple-200 text-purple-800 font-semibold">
-                      2ème Courbe
-                    </span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-purple-600 pointer-events-none">
-                      €
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={expectedRevenueInput}
-                      onChange={(e) => setExpectedRevenueInput(e.target.value)}
-                      placeholder={revenueInput || '0.00'}
-                      className="w-full pl-8 pr-3 py-2 text-lg font-bold font-mono-numbers bg-white border border-purple-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-purple-500 text-purple-800 shadow-2xs"
-                    />
-                  </div>
-                  <p className="text-[11px] text-purple-700/80">
-                    Inclut les redevances estimées des ventes Ads récentes
-                  </p>
-                </div>
-
-                {/* 4. Optionnel : Ventes directes Ads pour comparer avec ACoS */}
+                {/* 3. Ventes directes Ads pour comparer avec ACoS */}
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Target className="w-3.5 h-3.5 text-slate-500" />
-                    <span>4. Ventes directes Ads (Optionnel)</span>
+                    <span>3. Ventes Ads console (€)</span>
                   </label>
                   <div className="relative">
                     <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-slate-500 pointer-events-none">
@@ -311,7 +255,7 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                     />
                   </div>
                   <p className="text-[11px] text-slate-500">
-                    Chiffre des « Ventes » affiché dans Amazon Ads
+                    Chiffre affiché dans la console Ads
                   </p>
                 </div>
 
@@ -323,7 +267,7 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-700 pb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xs uppercase tracking-wider font-bold text-amber-400">
-                      Résultat TACoS Global
+                      Résultat TACoS Factuel
                     </span>
                     <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${diagnosticReal.badgeClass}`}>
                       {diagnosticReal.shortLabel}
@@ -343,7 +287,7 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                       {rev > 0 ? `${tacosReal.toFixed(1)} %` : '—'}
                     </div>
                     <div className="text-[10px] text-slate-300 mt-1">
-                      Part pub absorbée sur le CA
+                      Part des redevances absorbée par la pub
                     </div>
                   </div>
 
@@ -360,29 +304,15 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                     </div>
                   </div>
 
-                  {/* TACoS Espéré ou ACoS comparatif */}
+                  {/* ACoS Direct Console */}
                   <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-                    {expectedRevenueInput && expRev !== rev ? (
-                      <>
-                        <div className="text-xs text-purple-300">TACoS Espéré (+ Ads)</div>
-                        <div className="text-3xl font-extrabold font-mono-numbers text-purple-400 mt-1">
-                          {expRev > 0 ? `${tacosExpected.toFixed(1)} %` : '—'}
-                        </div>
-                        <div className="text-[10px] text-purple-200 mt-1">
-                          Bénéfice espéré : {formatCurrency(profitExpected)}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-xs text-slate-400">ACoS Direct Console</div>
-                        <div className="text-3xl font-extrabold font-mono-numbers text-slate-200 mt-1">
-                          {adsDirectSales > 0 ? `${acosDirect.toFixed(1)} %` : '—'}
-                        </div>
-                        <div className="text-[10px] text-slate-400 mt-1">
-                          Sur ventes directes pubs
-                        </div>
-                      </>
-                    )}
+                    <div className="text-xs text-slate-400">ACoS Direct Console</div>
+                    <div className="text-3xl font-extrabold font-mono-numbers text-slate-200 mt-1">
+                      {adsDirectSales > 0 ? `${acosDirect.toFixed(1)} %` : '—'}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">
+                      Sur ventes directes pubs
+                    </div>
                   </div>
                 </div>
 
@@ -532,7 +462,7 @@ export const TacosCalculatorModal: React.FC<TacosCalculatorModalProps> = ({
                   Sur Amazon Ads, l'<strong>ACoS direct</strong> est trompeur pour un auteur de livres : il ne compte QUE les ventes réalisées directement suite à un clic sur votre pub.
                 </p>
                 <p className="text-blue-800 leading-relaxed">
-                  En réalité, la publicité sur KDP déclenche un puissant <strong>effet boule de neige (Halo Effect)</strong> :
+                  En réalité, la publicité sur KDP déclenche un puissant <strong>effet d'entraînement (Halo Effect)</strong> :
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-blue-900 font-medium pl-1">
                   <li>Elle améliore le classement de vente (BSR) de votre livre, augmentant sa visibilité naturelle sur Amazon.</li>
