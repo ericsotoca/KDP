@@ -11,10 +11,13 @@ import {
   formatDateFr,
   formatLastUpdated,
   getDailyChartData,
-  getTacosDiagnostic
+  getTacosDiagnostic,
+  getMonthTrendProjection,
+  MonthTrendProjection
 } from '../utils/calculations';
 import { CumulativeMonthChart } from './CumulativeMonthChart';
 import { TacosCalculatorModal } from './TacosCalculatorModal';
+import { AmazonSyncModal } from './AmazonSyncModal';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -28,7 +31,13 @@ import {
   Clock,
   RotateCw,
   Check,
-  Calculator
+  Calculator,
+  Sparkles,
+  Zap,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Clipboard
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -65,6 +74,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const monthMetrics = getMonthMetrics(entries, selectedYear, selectedMonth);
   const yearMetrics = getYearMetrics(entries, selectedYear);
   const dailyPoints = getDailyChartData(entries, selectedYear, selectedMonth);
+  const projection: MonthTrendProjection = getMonthTrendProjection(entries, selectedYear, selectedMonth);
 
   // Month navigation helpers
   const handlePrevMonth = () => {
@@ -118,6 +128,171 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [quickAds, setQuickAds] = useState<string>('');
   const [quickSaved, setQuickSaved] = useState<boolean>(false);
   const [isTacosModalOpen, setIsTacosModalOpen] = useState<boolean>(false);
+  const [isAmazonSyncModalOpen, setIsAmazonSyncModalOpen] = useState<boolean>(false);
+  const [isFetchingDirect, setIsFetchingDirect] = useState<boolean>(false);
+  const [directSyncSuccess, setDirectSyncSuccess] = useState<string | null>(null);
+  const [directSyncError, setDirectSyncError] = useState<string | null>(null);
+
+  // 1-Click Direct Fetch directly from the dashboard
+  const handleDirectAmazonFetch = async (simulate: boolean = false) => {
+    setIsFetchingDirect(true);
+    setDirectSyncError(null);
+    setDirectSyncSuccess(null);
+
+    try {
+      const savedEntity = localStorage.getItem('kdp_amazon_entity_id') || 'ENTITY10NY3ZV74DMDV';
+      const savedCookie = localStorage.getItem('kdp_amazon_cookie') || '';
+
+      // If no session cookie is configured and not forced simulate, open modal to configure or test
+      if (!savedCookie.trim() && !simulate) {
+        setIsFetchingDirect(false);
+        setIsAmazonSyncModalOpen(true);
+        return;
+      }
+
+      const response = await fetch('/api/amazon/fetch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-amazon-cookie': savedCookie.trim(),
+        },
+        body: JSON.stringify({
+          entityId: savedEntity.trim(),
+          year: selectedYear,
+          month: selectedMonth,
+          cookie: savedCookie.trim(),
+          simulate,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        if (data.code === 'AUTH_REQUIRED' || data.code === 'SESSION_EXPIRED') {
+          setIsAmazonSyncModalOpen(true);
+        } else {
+          setDirectSyncError(data.message || 'Erreur lors de la récupération Amazon Ads.');
+          setTimeout(() => setDirectSyncError(null), 6000);
+        }
+        setIsFetchingDirect(false);
+        return;
+      }
+
+      const finalRev = data.revenue != null ? data.revenue : monthMetrics.monthRevenue;
+      const finalAds = data.adsCost != null ? data.adsCost : monthMetrics.monthAds;
+
+      if (onSaveMonthlySummary) {
+        onSaveMonthlySummary(selectedYear, selectedMonth, finalRev, finalAds);
+      }
+      setQuickRevenue(finalRev.toString());
+      setQuickAds(finalAds.toString());
+
+      setDirectSyncSuccess(
+        `Synchronisé en 1 Clic ! Dépenses Ads : ${formatCurrency(finalAds)} · CA KDP : ${formatCurrency(finalRev)}`
+      );
+      setTimeout(() => setDirectSyncSuccess(null), 6000);
+
+    } catch (err: any) {
+      setDirectSyncError(`Erreur de connexion : ${err.message}`);
+      setTimeout(() => setDirectSyncError(null), 6000);
+    } finally {
+      setIsFetchingDirect(false);
+    }
+  };
+
+  // Extraction automatique du chiffre après "Coût total" ou redevances
+  const handleExtractFromText = (text: string): boolean => {
+    if (!text || !text.trim()) return false;
+
+    // 1. Recherche prioritaire du chiffre après "Coût total"
+    const coutTotalPatterns = [
+      /Co[uû]t\s+total\s*[:\n\r\t]*€?\s*([0-9\s]+(?:[,.][0-9]{1,2})?)/i,
+      /Co[uû]t\s+total[^\d\n\r]{0,40}?([0-9\s]+[,.][0-9]{2})/i,
+      /Total\s+des\s+co[uû]ts\s*[:\n\r\t]*€?\s*([0-9\s]+(?:[,.][0-9]{1,2})?)/i,
+      /Total\s+cost\s*[:\n\r\t]*€?\s*([0-9\s]+(?:[,.][0-9]{1,2})?)/i,
+      /Co[uû]t\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+      /D[ée]penses?\s*(?:totales?)?\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+      /Spend\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+    ];
+
+    let extractedAdsCost: number | null = null;
+    for (const rx of coutTotalPatterns) {
+      const match = text.match(rx);
+      if (match && match[1]) {
+        const val = parseFloat(match[1].replace(/\s/g, '').replace(',', '.'));
+        if (!isNaN(val) && val >= 0) {
+          extractedAdsCost = val;
+          break;
+        }
+      }
+    }
+
+    // 2. Recherche du CA KDP (Ventes, Redevances)
+    const revPatterns = [
+      /Redevances?\s*(?:estim[ée]es?)?\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+      /Chiffre\s+d'affaires\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+      /Ventes\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+      /Royalties\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+      /Sales\s*[:\n\r]*€?\s*([0-9\s]+[,.][0-9]{2})/i,
+    ];
+
+    let extractedRev: number | null = null;
+    for (const rx of revPatterns) {
+      const match = text.match(rx);
+      if (match && match[1]) {
+        const val = parseFloat(match[1].replace(/\s/g, '').replace(',', '.'));
+        if (!isNaN(val) && val >= 0) {
+          extractedRev = val;
+          break;
+        }
+      }
+    }
+
+    if (extractedAdsCost !== null || extractedRev !== null) {
+      const newRev = extractedRev !== null ? extractedRev : parsedQuickRev;
+      const newAds = extractedAdsCost !== null ? extractedAdsCost : parsedQuickAds;
+
+      if (extractedAdsCost !== null) {
+        setQuickAds(extractedAdsCost.toString());
+      }
+      if (extractedRev !== null) {
+        setQuickRevenue(extractedRev.toString());
+      }
+
+      if (onSaveMonthlySummary) {
+        onSaveMonthlySummary(selectedYear, selectedMonth, newRev, newAds);
+      }
+
+      setDirectSyncSuccess(
+        `Chiffre après "Coût total" détecté et ajouté automatiquement : ${
+          extractedAdsCost !== null ? formatCurrency(extractedAdsCost) : ''
+        }${extractedRev !== null ? ` (et CA : ${formatCurrency(extractedRev)})` : ''}`
+      );
+      setTimeout(() => setDirectSyncSuccess(null), 6000);
+      return true;
+    }
+
+    return false;
+  };
+
+  const handlePasteClipboardAds = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const clipboardText = await navigator.clipboard.readText();
+        if (clipboardText) {
+          const success = handleExtractFromText(clipboardText);
+          if (!success) {
+            setDirectSyncError(
+              'Aucun montant après "Coût total" détecté dans le texte copié.'
+            );
+            setTimeout(() => setDirectSyncError(null), 5000);
+          }
+        }
+      }
+    } catch {
+      setIsAmazonSyncModalOpen(true);
+    }
+  };
 
   const tacosDiagnostic = getTacosDiagnostic(
     monthMetrics.tacos,
@@ -161,6 +336,55 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6">
       
+      {/* Notifications de synchronisation 1-Clic en direct */}
+      {directSyncSuccess && (
+        <div className="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-md text-xs font-bold flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <span className="w-6 h-6 rounded-lg bg-white/20 flex items-center justify-center font-bold text-white shadow-2xs">
+              ⚡
+            </span>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+              <span className="text-emerald-100 font-semibold">Amazon Ads (ENTITY10NY3ZV74DMDV) :</span>
+              <span>{directSyncSuccess}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => setDirectSyncSuccess(null)}
+            className="p-1 text-white/80 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Fermer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {directSyncError && (
+        <div className="bg-rose-600 text-white px-4 py-3 rounded-xl shadow-md text-xs font-bold flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-200 shrink-0" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+              <span className="text-rose-100 font-semibold">Récupération Amazon :</span>
+              <span>{directSyncError}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsAmazonSyncModalOpen(true)}
+              className="px-2.5 py-1 bg-white/20 hover:bg-white/30 text-white rounded text-[11px] font-bold underline transition-colors cursor-pointer"
+            >
+              Configurer
+            </button>
+            <button
+              onClick={() => setDirectSyncError(null)}
+              className="p-1 text-white/80 hover:text-white rounded hover:bg-white/10 transition-colors cursor-pointer"
+              aria-label="Fermer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Month Selector & Context Bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -184,8 +408,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Date Navigation Controls */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        {/* Date Navigation & 1-Click Sync Controls */}
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={() => handleDirectAmazonFetch(false)}
+            disabled={isFetchingDirect}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 via-amber-500 to-orange-500 hover:from-amber-700 hover:to-orange-600 active:scale-[0.98] text-white rounded-lg text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer disabled:opacity-60"
+            title="Aller chercher directement et récupérer les données depuis Amazon Ads ENTITY10NY3ZV74DMDV d'un seul clic"
+          >
+            {isFetchingDirect ? (
+              <>
+                <RotateCw className="w-3.5 h-3.5 animate-spin text-white" />
+                <span>Récupération...</span>
+              </>
+            ) : (
+              <>
+                <Zap className="w-3.5 h-3.5 text-amber-100 fill-amber-100" />
+                <span>⚡ Récupérer Amazon Ads (1 Clic)</span>
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={() => setIsAmazonSyncModalOpen(true)}
+            className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+            title="Options de synchronisation et réglages du compte"
+            aria-label="Options de synchronisation"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+          </button>
+
           {!isCurrentMonth && (
             <button
               onClick={handleCurrentMonth}
@@ -219,6 +471,123 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* SECTION HÉROS : BÉNÉFICE NET PROJETÉ (AFFICHÉ EN HAUT DE PAGE DÈS QUE POSSIBLE) */}
+      <div
+        className={`rounded-xl border p-5 shadow-xs transition-all ${
+          projection.hasEnoughData
+            ? 'bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-white border-emerald-300 ring-2 ring-emerald-500/15'
+            : 'bg-white border-slate-200'
+        }`}
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-600 text-white shadow-2xs">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Bénéfice Net Projeté</span>
+              </span>
+              <span className="text-xs font-semibold text-slate-700">
+                Fin de mois ({getMonthNameFr(selectedMonth)} {selectedYear})
+              </span>
+              {projection.hasEnoughData ? (
+                <span className="text-[11px] font-medium text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                  Calculé sur {projection.cutoffDay} jours saisis ({projection.daysRemaining} j restants)
+                </span>
+              ) : null}
+            </div>
+
+            {projection.hasEnoughData ? (
+              <div className="pt-1 flex flex-col sm:flex-row sm:items-baseline gap-2 sm:gap-4">
+                <span
+                  className={`text-3xl sm:text-4xl font-extrabold font-mono-numbers tracking-tight ${
+                    projection.projectedEndProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                  }`}
+                >
+                  {formatCurrency(projection.projectedEndProfit)}
+                </span>
+                <span className="text-xs text-slate-600 flex items-center gap-1.5 font-medium">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Rythme quotidien moyen :</span>
+                  <strong className="font-mono-numbers text-emerald-700 font-bold">
+                    +{formatCurrency(projection.dailyAvgProfit)} / j
+                  </strong>
+                </span>
+              </div>
+            ) : (
+              <div className="pt-2 text-xs text-slate-600 flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                <Clock className="w-4 h-4 text-slate-400 shrink-0" />
+                <div>
+                  <p className="font-semibold text-slate-800">
+                    Projection débloquée dès 3 jours de saisie dans le mois.
+                  </p>
+                  <p className="text-slate-500 text-[11px] mt-0.5">
+                    Actuellement {projection.entryCount} / 3 jours enregistrés. Encore{' '}
+                    <strong>{Math.max(1, 3 - projection.entryCount)} saisie{3 - projection.entryCount > 1 ? 's' : ''}</strong> pour afficher automatiquement votre bénéfice net prévisionnel de fin de mois.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Indicateurs clés associés au projeté */}
+          {projection.hasEnoughData && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-white/95 p-3 rounded-xl border border-emerald-200/80 shadow-2xs text-xs">
+              <div className="space-y-0.5 pr-2">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                  Déjà réalisé
+                </span>
+                <span
+                  className={`font-mono-numbers font-bold text-sm sm:text-base ${
+                    monthMetrics.monthProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                  }`}
+                >
+                  {formatCurrency(monthMetrics.monthProfit)}
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  Reste : +{formatCurrency(projection.projectedRemainingProfit)}
+                </span>
+              </div>
+
+              <div className="space-y-0.5 px-2 border-l border-slate-100">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                  Marge projetée
+                </span>
+                <span className="font-mono-numbers font-bold text-sm sm:text-base text-slate-800">
+                  {formatPercent(projection.projectedEndMargin)}
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  Actuelle : {formatPercent(monthMetrics.marginPercent)}
+                </span>
+              </div>
+
+              <div className="space-y-0.5 px-2 border-l border-slate-100">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                  CA KDP projeté
+                </span>
+                <span className="font-mono-numbers font-bold text-sm sm:text-base text-blue-700">
+                  {formatCurrency(projection.projectedEndRevenue)}
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  +{formatCurrency(projection.dailyAvgRevenue)} / j
+                </span>
+              </div>
+
+              <div className="space-y-0.5 pl-2 border-l border-slate-100">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">
+                  Pub Ads projetée
+                </span>
+                <span className="font-mono-numbers font-bold text-sm sm:text-base text-amber-700">
+                  {formatCurrency(projection.projectedEndAds)}
+                </span>
+                <span className="text-[10px] text-amber-600 font-semibold block">
+                  TACoS : {projection.projectedEndTacos.toFixed(1)} %
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* QUICK 2-NUMBER ENTRY WIDGET FOR THE MONTH */}
       <form
         onSubmit={handleQuickSubmit}
@@ -239,7 +608,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => handleDirectAmazonFetch(false)}
+              disabled={isFetchingDirect}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-orange-500 hover:from-amber-700 hover:to-orange-600 rounded-md transition-all shadow-2xs cursor-pointer disabled:opacity-60"
+              title="Aller chercher directement les dépenses depuis Amazon Ads (ENTITY10NY3ZV74DMDV) d'un seul clic"
+            >
+              {isFetchingDirect ? (
+                <>
+                  <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>Récupération...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-amber-100 fill-amber-100" />
+                  <span>⚡ 1 Clic Amazon Ads</span>
+                </>
+              )}
+            </button>
+
             {quickSaved ? (
               <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-md flex items-center gap-1 animate-pulse">
                 <Check className="w-3.5 h-3.5 text-emerald-600" />
@@ -284,6 +673,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 placeholder="0.00"
                 value={quickRevenue}
                 onChange={(e) => setQuickRevenue(e.target.value)}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData('text');
+                  if (/redevance|vente|chiffre|ca|co[uû]t\s+total/i.test(text)) {
+                    const handled = handleExtractFromText(text);
+                    if (handled) {
+                      e.preventDefault();
+                    }
+                  }
+                }}
                 className="w-full pl-8 pr-3 py-2 text-base font-bold font-mono-numbers bg-white border border-blue-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-blue-700 shadow-2xs"
               />
             </div>
@@ -310,15 +708,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* Chiffre 2: Amazon Ads */}
           <div className="lg:col-span-5">
             <div className="flex items-center justify-between mb-1">
-              <label className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
-                2. Amazon Ads du mois (€)
+              <label className="text-[11px] font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1">
+                <span>2. Amazon Ads du mois (€)</span>
               </label>
-              {Math.abs(parsedQuickAds - monthMetrics.monthAds) >= 0.01 && monthMetrics.monthAds > 0 && (
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
-                  {parsedQuickAds >= monthMetrics.monthAds ? '+' : ''}
-                  {(parsedQuickAds - monthMetrics.monthAds).toFixed(2)} €
-                </span>
-              )}
+
+              <div className="flex items-center gap-1.5">
+                {Math.abs(parsedQuickAds - monthMetrics.monthAds) >= 0.01 && monthMetrics.monthAds > 0 && (
+                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
+                    {parsedQuickAds >= monthMetrics.monthAds ? '+' : ''}
+                    {(parsedQuickAds - monthMetrics.monthAds).toFixed(2)} €
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handlePasteClipboardAds}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 font-semibold text-[10px] transition-colors cursor-pointer border border-amber-300/80"
+                  title="Recherche et extrait automatiquement le chiffre après 'Coût total' dans le presse-papier"
+                >
+                  <Clipboard className="w-3 h-3 text-amber-700" />
+                  <span>Détecter "Coût total"</span>
+                </button>
+              </div>
             </div>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-sm font-bold text-amber-600 pointer-events-none">
@@ -331,6 +741,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 placeholder="0.00"
                 value={quickAds}
                 onChange={(e) => setQuickAds(e.target.value)}
+                onPaste={(e) => {
+                  const text = e.clipboardData.getData('text');
+                  if (/co[uû]t\s+total|dépense|spend/i.test(text)) {
+                    const handled = handleExtractFromText(text);
+                    if (handled) {
+                      e.preventDefault();
+                    }
+                  }
+                }}
                 className="w-full pl-8 pr-3 py-2 text-base font-bold font-mono-numbers bg-white border border-amber-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500 text-amber-700 shadow-2xs"
               />
             </div>
@@ -372,7 +791,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Live calculation preview right below inputs */}
         <div className="p-2.5 bg-white/90 rounded-lg border border-slate-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-3.5 flex-wrap">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Bilan en direct :
             </span>
@@ -401,6 +820,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {parsedQuickRev > 0 ? `${quickTacos.toFixed(1)} %` : '—'}
               </strong>
             </span>
+
+            {projection.hasEnoughData && (
+              <>
+                <span className="text-slate-300">|</span>
+                <span className="flex items-center gap-1.5 text-emerald-900 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="font-semibold">Bénéfice Net Projeté (Fin de mois) :</span>
+                  <strong className={`font-mono-numbers font-bold ${
+                    projection.projectedEndProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                  }`}>
+                    {formatCurrency(projection.projectedEndProfit)}
+                  </strong>
+                </span>
+              </>
+            )}
           </div>
         </div>
       </form>
@@ -514,15 +948,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Bouton vers le simulateur TACoS */}
-          <div className="mt-3 pt-2 border-t border-slate-100">
+          {/* Boutons d'action : TACoS & Sync Amazon Ads */}
+          <div className="mt-3 pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleDirectAmazonFetch(false)}
+              disabled={isFetchingDirect}
+              className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer disabled:opacity-60"
+              title="Récupérer directement depuis Amazon Ads ENTITY10NY3ZV74DMDV d'un seul clic"
+            >
+              {isFetchingDirect ? (
+                <>
+                  <RotateCw className="w-3.5 h-3.5 animate-spin text-white" />
+                  <span>Récupération...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5 text-amber-100 fill-amber-100" />
+                  <span>1 Clic Ads</span>
+                </>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => setIsTacosModalOpen(true)}
-              className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-semibold border border-amber-200 transition-colors cursor-pointer"
+              className="flex items-center justify-center gap-1.5 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg text-xs font-semibold border border-amber-200 transition-colors cursor-pointer"
             >
               <Calculator className="w-3.5 h-3.5 text-amber-600" />
-              <span>Calculateur TACoS</span>
+              <span>Calculateur</span>
             </button>
           </div>
         </div>
@@ -549,6 +1003,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             }`}>
               {formatCurrency(monthMetrics.monthProfit)}
             </div>
+
+            {projection.hasEnoughData ? (
+              <div className="mt-2.5 p-2 bg-emerald-50/90 rounded-lg border border-emerald-200">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-emerald-900 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <span>Projeté fin de mois :</span>
+                  </span>
+                  <span className={`font-mono-numbers font-bold text-xs ${
+                    projection.projectedEndProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                  }`}>
+                    {formatCurrency(projection.projectedEndProfit)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-emerald-700/90 mt-0.5">
+                  <span>Rythme : +{formatCurrency(projection.dailyAvgProfit)}/j</span>
+                  <span>Marge proj. : {formatPercent(projection.projectedEndMargin)}</span>
+                </div>
+              </div>
+            ) : null}
 
             <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
               <span>Marge bénéficiaire :</span>
@@ -807,6 +1281,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         defaultAds={monthMetrics.monthAds}
         selectedMonth={selectedMonth}
         selectedYear={selectedYear}
+      />
+
+      {/* MODAL SYNCHRONISATION AUTOMATIQUE AMAZON ADS & KDP */}
+      <AmazonSyncModal
+        isOpen={isAmazonSyncModalOpen}
+        onClose={() => setIsAmazonSyncModalOpen(false)}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+        currentRevenue={monthMetrics.monthRevenue}
+        currentAds={monthMetrics.monthAds}
+        onApplySync={(year, month, revenue, adsCost) => {
+          if (onSaveMonthlySummary) {
+            onSaveMonthlySummary(year, month, revenue, adsCost);
+            setQuickSaved(true);
+            setTimeout(() => setQuickSaved(false), 3000);
+          }
+        }}
       />
 
     </div>

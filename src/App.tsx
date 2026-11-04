@@ -19,7 +19,8 @@ import { HistoryView } from './components/HistoryView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { GoalsView } from './components/GoalsView';
 import { BackupView } from './components/BackupView';
-import { ShieldCheck, Sparkles, X, Heart } from 'lucide-react';
+import { ShieldCheck, Sparkles, X, Heart, Zap, CheckCircle2 } from 'lucide-react';
+import { formatCurrency, getMonthNameFr } from './utils/calculations';
 
 export default function App() {
   const [entries, setEntries] = useState<DailyEntry[]>(() => {
@@ -33,6 +34,63 @@ export default function App() {
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
   const [editingEntry, setEditingEntry] = useState<DailyEntry | null>(null);
+  const [syncToast, setSyncToast] = useState<{
+    message: string;
+    adsCost?: number;
+    revenue?: number;
+  } | null>(null);
+
+  // Auto-sync from URL parameters (1-Click Bookmarklet or direct URL sync)
+  useEffect(() => {
+    try {
+      const search = window.location.search;
+      if (!search) return;
+      const params = new URLSearchParams(search);
+      const isSync = params.get('sync') === 'amazon_ads';
+      const syncAds = params.get('syncAds') || params.get('syncCost') || params.get('coutTotal') || params.get('cout');
+      const syncRev = params.get('syncRev') || params.get('syncRevenue') || params.get('syncSales');
+      const paramYear = params.get('year') ? parseInt(params.get('year')!, 10) : null;
+      const paramMonth = params.get('month') ? parseInt(params.get('month')!, 10) : null;
+
+      if (isSync || syncAds || syncRev) {
+        const adsVal = syncAds ? parseFloat(syncAds.replace(',', '.')) : 0;
+        const revVal = syncRev ? parseFloat(syncRev.replace(',', '.')) : 0;
+        const targetYear = paramYear && !isNaN(paramYear) ? paramYear : now.getFullYear();
+        const targetMonth = paramMonth && !isNaN(paramMonth) ? paramMonth : (now.getMonth() + 1);
+
+        if (!isNaN(adsVal) && (adsVal > 0 || revVal > 0)) {
+          const monthPrefix = `${targetYear}-${String(targetMonth).padStart(2, '0')}`;
+          const currentEntry = entries.find((e) => e.date.startsWith(monthPrefix));
+          const existingRev = currentEntry?.revenue || 0;
+          const existingAds = currentEntry?.adsCost || 0;
+
+          const finalRev = revVal > 0 ? revVal : existingRev;
+          const finalAds = adsVal > 0 ? adsVal : existingAds;
+
+          handleSaveMonthlySummary(targetYear, targetMonth, finalRev, finalAds);
+          setSelectedYear(targetYear);
+          setSelectedMonth(targetMonth);
+          setActiveTab('dashboard');
+
+          setSyncToast({
+            message: `Synchronisation Amazon Ads réussie pour ${getMonthNameFr(targetMonth)} ${targetYear} !`,
+            adsCost: adsVal > 0 ? adsVal : undefined,
+            revenue: revVal > 0 ? revVal : undefined,
+          });
+
+          // Clean up URL without reload
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+
+          setTimeout(() => {
+            setSyncToast(null);
+          }, 8000);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Save entries whenever updated
   const handleSaveEntry = (
@@ -143,6 +201,33 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900">
       
+      {/* Toast Notification de Synchronisation Réussie */}
+      {syncToast && (
+        <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-4 py-3 shadow-md border-b border-emerald-500 animate-in slide-in-from-top duration-200">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5">
+              <span className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center font-bold text-white shadow-2xs">
+                ⚡
+              </span>
+              <div>
+                <strong className="text-sm font-bold block">{syncToast.message}</strong>
+                <span className="text-xs text-emerald-100">
+                  {syncToast.adsCost != null && `Amazon Ads : ${formatCurrency(syncToast.adsCost)} `}
+                  {syncToast.revenue != null && `· CA KDP : ${formatCurrency(syncToast.revenue)}`}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setSyncToast(null)}
+              className="p-1 rounded-lg hover:bg-white/20 text-white/90 hover:text-white transition-colors cursor-pointer"
+              aria-label="Fermer la notification"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <Header
         activeTab={activeTab}
