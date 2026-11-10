@@ -28,6 +28,42 @@ export default function App() {
   });
 
   const [goals, setGoals] = useState<UserGoals>(() => loadStoredGoals());
+
+  // Le fichier public est la source prioritaire ; LocalStorage sert de secours hors ligne.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSharedData = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.BASE_URL}kdp-data.json`, {
+          cache: 'no-store',
+        });
+        if (!response.ok) throw new Error('Fichier partagé indisponible');
+
+        const data = await response.json();
+        if (!Array.isArray(data.entries)) throw new Error('Format des données partagées invalide');
+
+        const validEntries = data.entries.filter((entry: any) =>
+          typeof entry.date === 'string' &&
+          typeof entry.revenue === 'number' &&
+          typeof entry.adsCost === 'number'
+        ) as DailyEntry[];
+
+        if (!cancelled && validEntries.length > 0) {
+          const sorted = validEntries.sort((a, b) => b.date.localeCompare(a.date));
+          setEntries(sorted);
+          saveStoredEntries(sorted);
+        }
+      } catch {
+        // En cas d'indisponibilité du fichier, les données déjà chargées depuis le téléphone restent actives.
+      }
+    };
+
+    loadSharedData();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
   
   const now = new Date();
