@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-17",
+  "updatedAt": "2026-11-21",
   "entries": [
     {
       "id": "monthly-2026-11",
       "date": "2026-11-01",
-      "revenue": 408.54,
-      "adsCost": 238.18,
-      "comment": "Saisie globale mensuelle — chiffres communiqués le 17/11/2026 ; dépenses Ads issues du rapport Campaign_Nov_17_2026.csv",
+      "revenue": 720.41,
+      "adsCost": 191.20,
+      "comment": "Saisie globale mensuelle — chiffres communiqués le 21/11/2026 ; dépenses Amazon Ads du 01/11 au 21/11/2026",
       "isMonthlyTotal": true,
       "isDemo": false,
       "createdAt": "2026-11-10T00:00:00.000Z",
-      "updatedAt": "2026-11-17T00:00:00.000Z"
+      "updatedAt": "2026-11-21T00:00:00.000Z"
     }
   ]
 }
