@@ -818,7 +818,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="flex items-center gap-1.5">
               <span>Cotisations sociales estimées :</span>
               <strong className="font-mono-numbers text-slate-800">
-                {parsedQuickRev > 0 ? formatPercent(quickMargin) : '0%'}
+                {formatCurrency(quickSocialContributions)} (25,6 %)
               </strong>
             </span>
 
@@ -1022,9 +1022,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span>Projeté fin de mois :</span>
                   </span>
                   <span className={`font-mono-numbers font-bold text-xs ${
-                    projection.projectedEndProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                    projectedNetAfterAdsAndSocial >= 0 ? 'text-emerald-700' : 'text-rose-700'
                   }`}>
-                    {formatCurrency(projection.projectedEndProfit)}
+                    {formatCurrency(projectedNetAfterAdsAndSocial)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-emerald-700/90 mt-0.5">
@@ -1037,7 +1037,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
               <span>Taux de cotisations estimé :</span>
               <span className="font-mono-numbers font-bold text-slate-800">
-                {formatPercent(monthMetrics.monthRevenue > 0 ? (monthNetAfterAdsAndSocial / monthMetrics.monthRevenue) * 100 : 0)}
+                25,6 %
               </span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
