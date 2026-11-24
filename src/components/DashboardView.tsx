@@ -816,7 +816,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-slate-300">|</span>
 
             <span className="flex items-center gap-1.5">
-              <span>Cotisations estimées (25,6 %) : {formatCurrency(quickSocialContributions)}</span>
+              <span>Cotisations sociales estimées :</span>
               <strong className="font-mono-numbers text-slate-800">
                 {parsedQuickRev > 0 ? formatPercent(quickMargin) : '0%'}
               </strong>
@@ -838,9 +838,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
                   <span className="font-semibold">Bénéfice Net Projeté (Fin de mois) :</span>
                   <strong className={`font-mono-numbers font-bold ${
-                    projection.projectedEndProfit >= 0 ? 'text-emerald-700' : 'text-rose-700'
+                    projectedNetAfterAdsAndSocial >= 0 ? 'text-emerald-700' : 'text-rose-700'
                   }`}>
-                    {formatCurrency(projection.projectedEndProfit)}
+                    {formatCurrency(projectedNetAfterAdsAndSocial)}
                   </strong>
                 </span>
               </>
@@ -998,9 +998,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Disponible après publicité et cotisations
             </span>
             <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-              monthMetrics.monthProfit >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+              monthNetAfterAdsAndSocial >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
             }`}>
-              {monthMetrics.monthProfit >= 0 ? (
+              {monthNetAfterAdsAndSocial >= 0 ? (
                 <TrendingUp className="w-4 h-4" />
               ) : (
                 <TrendingDown className="w-4 h-4" />
@@ -1009,7 +1009,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
           <div className="mt-3">
             <div className={`text-2xl lg:text-3xl font-bold font-mono-numbers ${
-              monthMetrics.monthProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+              monthNetAfterAdsAndSocial >= 0 ? 'text-emerald-600' : 'text-rose-600'
             }`}>
               {formatCurrency(monthNetAfterAdsAndSocial)}
             </div>
@@ -1028,8 +1028,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[10px] text-emerald-700/90 mt-0.5">
-                  <span>Rythme : +{formatCurrency(projection.dailyAvgProfit)}/j</span>
-                  <span>Marge proj. : {formatPercent(projection.projectedEndMargin)}</span>
+                  <span>Cotisations projetées : {formatCurrency(projectedSocialContributions)}</span>
+                  <span>Marge nette proj. : {formatPercent(projection.projectedEndRevenue > 0 ? (projectedNetAfterAdsAndSocial / projection.projectedEndRevenue) * 100 : 0)}</span>
                 </div>
               </div>
             ) : null}
@@ -1037,7 +1037,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
               <span>Taux de cotisations estimé :</span>
               <span className="font-mono-numbers font-bold text-slate-800">
-                {formatPercent(monthMetrics.marginPercent)}
+                {formatPercent(monthMetrics.monthRevenue > 0 ? (monthNetAfterAdsAndSocial / monthMetrics.monthRevenue) * 100 : 0)}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
