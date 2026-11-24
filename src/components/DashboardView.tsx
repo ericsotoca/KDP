@@ -336,7 +336,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const quickSocialContributions = parsedQuickRev * SOCIAL_CONTRIBUTION_RATE;
   const quickProfit = parsedQuickRev - parsedQuickAds - quickSocialContributions;
-  const quickMargin = parsedQuickRev > 0 ? (quickProfit / parsedQuickRev) * 100 : 0;
   const quickTacos = parsedQuickRev > 0 ? (parsedQuickAds / parsedQuickRev) * 100 : 0;
 
   // Find current month entry to show last update timestamp
@@ -1035,6 +1034,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             ) : null}
 
             <div className="mt-2 flex items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-100">
+              <span>Cotisations sociales estimées :</span>
+              <span className="font-mono-numbers font-bold text-slate-800">
+                {formatCurrency(monthSocialContributions)}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
               <span>Taux de cotisations estimé :</span>
               <span className="font-mono-numbers font-bold text-slate-800">
                 25,6 %
