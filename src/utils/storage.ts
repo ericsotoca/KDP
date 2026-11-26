@@ -186,6 +186,7 @@ export async function importBackupFromJson(
             revenue: Math.max(0, Number(item.revenue) || 0),
             adsCost: Math.max(0, Number(item.adsCost) || 0),
             booksSold: item.booksSold != null ? Number(item.booksSold) : undefined,
+            isMonthlyTotal: item.isMonthlyTotal === true,
             comment: typeof item.comment === 'string' ? item.comment : undefined,
             createdAt: item.createdAt || new Date().toISOString(),
             updatedAt: item.updatedAt || new Date().toISOString(),
