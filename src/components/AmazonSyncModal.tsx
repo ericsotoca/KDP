@@ -14,7 +14,6 @@ import {
   AlertCircle,
   RotateCw,
   Building2,
-  KeyRound,
   CheckCircle2
 } from 'lucide-react';
 import { formatCurrency, getMonthNameFr } from '../utils/calculations';
@@ -44,10 +43,15 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
   const [entityId, setEntityId] = useState<string>(() => {
     return localStorage.getItem('kdp_amazon_entity_id') || DEFAULT_ENTITY_ID;
   });
-  const [amazonCookie, setAmazonCookie] = useState<string>(() => {
-    return localStorage.getItem('kdp_amazon_cookie') || '';
-  });
-  const [showCookieConfig, setShowCookieConfig] = useState(false);
+  // Supprime les anciens cookies de session éventuellement stockés par une version précédente.
+  // Un cookie Amazon ne doit jamais être conservé ni transmis à ce service.
+  useEffect(() => {
+    try {
+      localStorage.removeItem('kdp_amazon_cookie');
+    } catch {
+      // ignore
+    }
+  }, []);
   const [isFetching, setIsFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [fetchSuccess, setFetchSuccess] = useState<string | null>(null);
@@ -77,16 +81,6 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
     }
   };
 
-  // Save cookie
-  const handleSaveCookie = (newCookie: string) => {
-    setAmazonCookie(newCookie);
-    try {
-      localStorage.setItem('kdp_amazon_cookie', newCookie);
-    } catch {
-      // ignore
-    }
-  };
-
   const amazonAdsUrl = `https://advertising.amazon.fr/campaign-manager/all-campaigns?entityId=${encodeURIComponent(
     entityId.trim() || DEFAULT_ENTITY_ID
   )}`;
@@ -99,23 +93,28 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
 
   // 1-Click Direct Fetch Handler
   const handleDirectFetch = async (forceSimulation: boolean = false) => {
-    setIsFetching(true);
     setFetchError(null);
     setFetchSuccess(null);
 
+    if (!forceSimulation) {
+      setFetchError(
+        'La récupération directe par cookie est désactivée pour protéger votre compte Amazon. Utilisez le raccourci favori : il lit uniquement les montants visibles dans votre page Campaign Manager, sans transmettre vos identifiants.'
+      );
+      return;
+    }
+
+    setIsFetching(true);
     try {
       const response = await fetch('/api/amazon/fetch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-amazon-cookie': amazonCookie.trim(),
         },
         body: JSON.stringify({
           entityId: entityId.trim() || DEFAULT_ENTITY_ID,
           year: selectedYear,
           month: selectedMonth,
-          cookie: amazonCookie.trim(),
-          simulate: forceSimulation,
+          simulate: true,
         }),
       });
 
@@ -123,8 +122,7 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
 
       if (!response.ok || !data.success) {
         if (data.code === 'AUTH_REQUIRED' || data.code === 'SESSION_EXPIRED') {
-          setShowCookieConfig(true);
-          setFetchError(
+           setFetchError(
             data.message || 'Session Amazon requise pour interroger directement le compte ENTITY10NY3ZV74DMDV.'
           );
         } else {
@@ -506,20 +504,12 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
                 <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
                   <button
                     onClick={() => handleDirectFetch(false)}
-                    disabled={isFetching}
-                    className="w-full sm:w-auto flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-amber-600 via-amber-500 to-orange-500 hover:from-amber-700 hover:to-orange-600 active:scale-[0.99] text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                    disabled={true}
+                    className="w-full sm:w-auto flex-1 py-3 px-5 rounded-xl bg-slate-200 text-slate-500 font-bold text-sm border border-slate-300 flex items-center justify-center gap-2 cursor-not-allowed"
+                    title="La récupération directe par cookie est désactivée pour protéger votre compte."
                   >
-                    {isFetching ? (
-                      <>
-                        <RotateCw className="w-4 h-4 animate-spin text-white" />
-                        <span>Récupération depuis Amazon en cours...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-4 h-4 text-amber-100 fill-amber-100" />
-                        <span>⚡ Récupérer maintenant (1 Clic)</span>
-                      </>
-                    )}
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Récupération directe désactivée</span>
                   </button>
 
                   <button
@@ -627,50 +617,14 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
                 </div>
               )}
 
-              {/* Session Cookie Configuration Card */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <KeyRound className="w-4 h-4 text-slate-600" />
-                    <span className="text-xs font-bold text-slate-800">
-                      Option permanente : Cookie de session serveur
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => setShowCookieConfig(!showCookieConfig)}
-                    className="text-xs font-semibold text-amber-700 hover:text-amber-800 underline cursor-pointer"
-                  >
-                    {showCookieConfig ? 'Masquer' : amazonCookie ? 'Modifier le cookie' : 'Afficher la configuration'}
-                  </button>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-900">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span className="text-xs font-bold">Protection de votre compte Amazon</span>
                 </div>
-
-                <p className="text-[11px] text-slate-500">
-                  Si vous souhaitez que le serveur puisse interroger Amazon sans que vous n'ayez jamais besoin d'ouvrir l'onglet Amazon, vous pouvez renseigner votre cookie de session ici (stockage 100% local dans votre navigateur).
+                <p className="text-[11px] text-emerald-800">
+                  Ne collez jamais de cookie ou de jeton de session Amazon dans cette application. Le raccourci favori est la méthode recommandée : il lit les montants affichés dans votre onglet Amazon et transmet uniquement ces montants au tableau de bord.
                 </p>
-
-                {(showCookieConfig || amazonCookie) && (
-                  <div className="space-y-2 pt-1 border-t border-slate-200">
-                    <label className="text-[11px] font-semibold text-slate-700 block">
-                      Cookie de session Amazon (session-id / at-main) :
-                    </label>
-                    <textarea
-                      value={amazonCookie}
-                      onChange={(e) => handleSaveCookie(e.target.value)}
-                      placeholder="Collez ici votre cookie de session Amazon..."
-                      rows={2}
-                      className="w-full p-2.5 text-[11px] font-mono bg-white border border-slate-300 rounded-lg text-slate-800 focus:ring-1 focus:ring-amber-500 focus:outline-hidden"
-                    />
-                    <div className="flex items-center justify-between text-[10px] text-slate-400">
-                      <span>Stocké uniquement dans votre navigateur (100% privé).</span>
-                      {amazonCookie && (
-                        <span className="text-emerald-600 font-bold flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Cookie enregistré
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
               </div>
 
             </div>
