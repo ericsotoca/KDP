@@ -295,13 +295,14 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
         const spendIdx = headers.findIndex(
           (h) => h.includes('coût total') || h.includes('cout total') || h.includes('total cost') || h.includes('spend') || h.includes('dépense') || h.includes('cout') || h.includes('coût')
         );
+        // Only KDP royalty columns may populate KDP revenue. Amazon Ads "Sales" are attributed sales, not royalties.
         const salesIdx = headers.findIndex(
-          (h) => h.includes('sales') || h.includes('vente') || h.includes('redevance') || h.includes('revenue')
+          (h) => h.includes('redevance') || h.includes('royalt')
         );
 
         if (spendIdx === -1 && salesIdx === -1) {
           setCsvError(
-            `Colonnes "Dépenses" ou "Ventes" non reconnues. En-têtes trouvées: ${headers.slice(0, 5).join(', ')}...`
+            `Colonnes "Dépenses Ads" ou "Redevances KDP" non reconnues. En-têtes trouvées: ${headers.slice(0, 5).join(', ')}...`
           );
           return;
         }
@@ -771,6 +772,9 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
                 <strong className="text-slate-900">"Exporter" / "Télécharger"</strong> (format CSV). Glissez le fichier ici :
               </p>
 
+              <p className="text-xs text-slate-600">
+                Important : les colonnes « Sales / Ventes » d’un rapport Amazon Ads correspondent aux ventes attribuées à la publicité, pas aux redevances KDP. Elles ne sont jamais utilisées comme chiffre d’affaires KDP.
+              </p>
               <div className="border-2 border-dashed border-slate-300 hover:border-amber-500 rounded-xl p-6 text-center bg-slate-50/60 transition-colors">
                 <input
                   type="file"
@@ -818,7 +822,7 @@ export const AmazonSyncModal: React.FC<AmazonSyncModalProps> = ({
                     </div>
 
                     <div className="bg-white p-2.5 rounded-lg border border-emerald-200/80">
-                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Total Ventes / CA</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-semibold block">Redevances KDP</span>
                       <strong className="text-base font-mono-numbers text-blue-700">
                         {csvParsedRevenue !== null ? formatCurrency(csvParsedRevenue) : '—'}
                       </strong>
