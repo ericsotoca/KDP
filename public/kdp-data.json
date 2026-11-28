@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-27",
+  "updatedAt": "2026-11-28",
   "entries": [
     {
       "id": "monthly-2026-11",
       "date": "2026-11-01",
-      "revenue": 1059.35,
-      "adsCost": 264.05,
-      "comment": "Saisie globale mensuelle — mise à jour du 27/11/2026",
+      "revenue": 1068.46,
+      "adsCost": 374.12,
+      "comment": "Saisie globale mensuelle — mise à jour du 28/11/2026",
       "isMonthlyTotal": true,
       "isDemo": false,
       "createdAt": "2026-11-10T00:00:00.000Z",
-      "updatedAt": "2026-11-27T00:00:00.000Z"
+      "updatedAt": "2026-11-28T00:00:00.000Z"
     }
   ]
 }
